@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message=".*Gym has been unmaintained.*")
+
 import os
 import torch
 from stable_baselines3 import PPO
@@ -15,59 +18,44 @@ LOG_PATH = "logs"
 MODEL_SAVE_PATH = f"models/{MODEL_NAME}"
 VECNORM_SAVE_PATH = f"models/{MODEL_NAME}_vecnorm.pkl"
 
-# --- GPU setup ---
-# SB3 runs the neural network on GPU but steps envs on CPU (correct —
-# MetaDrive can't run on GPU). The 3060 Ti accelerates forward/backward
-# passes during the gradient update phase.
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cpu"                  # MLP policy — CPU is faster than GPU for this
 print(f"Using device: {DEVICE}")
-if DEVICE == "cuda":
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-# --- Hyperparameters ---
+# --- Seed ranges (must not overlap) ---
+# TRAIN_SEED:  0     → covers scenarios 0–79   (20 scenarios × 4 envs)
+# EVAL_SEED:   5000  → inline EvalCallback held-out set
+# (evaluate.py uses 2000 — separate from both)
 N_ENVS = 4
-N_STEPS = 2048          # FIX 1: was 4096. Effective batch = N_ENVS * N_STEPS = 8192.
-                        # 4096*4 = 16k steps before any update — too long, value
-                        # function gets stale. 2048*4 = 8192 is the SB3 sweet spot.
-BATCH_SIZE = 512        # FIX 2: was 256. Larger batch utilizes 3060 Ti better
-                        # and gives more stable gradient estimates.
+N_STEPS = 2048
+BATCH_SIZE = 512
 TOTAL_TIMESTEPS = 5_000_000
-
-# FIX 3: was 100 scenarios. Too many too early — agent never sees the same
-# map twice so it can't build intuition. Start at 20 for early wins,
-# then expand to 100+ once you see >20% success around 1M steps.
-NUM_TRAIN_SCENARIOS = 20
+NUM_TRAIN_SCENARIOS = 10
 TRAIN_SEED = 0
-EVAL_SEED = 5000        # FIX 4: was 1000. Seeds 1000-1100 overlap with your
-                        # evaluate.py test set (start_seed=1000, 20 scenarios).
-                        # Use 5000 to keep EvalCallback truly held-out.
+EVAL_SEED = 5000
 
 
 def make_env(seed: int, scenario_index: int):
+    """Factory for SubprocVecEnv. Each worker gets a non-overlapping seed range."""
     def _init():
         env = SafeMetaDriveEnv(config={
             "num_scenarios": NUM_TRAIN_SCENARIOS,
             "start_seed": seed + scenario_index * NUM_TRAIN_SCENARIOS,
             "use_render": False,
             "horizon": 1000,
+            "out_of_road_penalty": 10.0, # up from 5.0 default
+            "crash_vehicle_penalty": 10.0 # up from 5.0 default
         })
         return env
     return _init
 
 
-class SyncVecNormCallback(BaseCallback):
+class SyncAndSaveVecNormCallback(BaseCallback):
     """
-    FIX 5 — THE PRIMARY CAUSE OF 0% SUCCESS RATE.
-
-    SB3's EvalCallback does NOT automatically sync VecNormalize stats between
-    train_env and eval_env. Your eval_env was constructed with training=False,
-    meaning it had zero/uninitialized running stats. The model received
-    completely unnormalized observations at eval time — totally different
-    scale from training — so it looked like 0% success even if the policy
-    had actually learned something.
-
-    This callback syncs obs_rms from train_env -> eval_env before each
-    evaluation, then freezes eval_env so stats don't drift during eval.
+    Fires on the same frequency as EvalCallback:
+    1. Syncs obs_rms from train_env -> eval_env so inline eval sees correctly
+       normalized observations (fixes the 0% success rate issue).
+    2. Saves a vecnorm snapshot to models/best/vecnorm.pkl so evaluate.py
+       can load it at any point mid-run without waiting for training to finish.
     """
     def __init__(self, train_env, eval_env, eval_freq, verbose=0):
         super().__init__(verbose)
@@ -76,14 +64,15 @@ class SyncVecNormCallback(BaseCallback):
         self.eval_freq = eval_freq
 
     def _on_step(self) -> bool:
-        if self.n_calls % self.eval_freq == 0:
+        if self.n_calls % self.eval_freq == 0 or self.n_calls == 1:
             self.eval_env.obs_rms = self.train_env.obs_rms
             self.eval_env.training = False
+            self.train_env.save("models/best/vecnorm.pkl")
         return True
 
 
 if __name__ == "__main__":
-    # --- 1. Training env ---
+    # --- Training env ---
     train_env = SubprocVecEnv([make_env(TRAIN_SEED, i) for i in range(N_ENVS)])
     train_env = VecNormalize(
         train_env,
@@ -93,26 +82,22 @@ if __name__ == "__main__":
         clip_reward=10.0,
     )
 
-    # --- 2. Eval env ---
-    # training=True here — stats will be overwritten by SyncVecNormCallback
-    # before each eval anyway, so initial value doesn't matter.
+    # --- Inline eval env (stats synced by callback before each eval) ---
     eval_env = SubprocVecEnv([make_env(EVAL_SEED, 0)])
     eval_env = VecNormalize(
         eval_env,
         norm_obs=True,
-        norm_reward=False,
+        norm_reward=False,  # Never normalize reward at eval time
         clip_obs=10.0,
-        training=True,
+        training=True,      # Will be frozen by SyncAndSaveVecNormCallback
     )
 
-    EVAL_FREQ = 25_000 // N_ENVS
+    EVAL_FREQ = 100_000 // N_ENVS   # Every 100k env steps — reduces training pauses
 
-    sync_cb = SyncVecNormCallback(train_env, eval_env, eval_freq=EVAL_FREQ)
+    sync_save_cb = SyncAndSaveVecNormCallback(train_env, eval_env, eval_freq=EVAL_FREQ)
 
     checkpoint_cb = CheckpointCallback(
-        save_freq=100_000 // N_ENVS,   # FIX 6: was 5000 — checkpointing every
-                                        # 5k steps creates hundreds of files and
-                                        # noticeably slows training. 100k is enough.
+        save_freq=100_000 // N_ENVS,
         save_path="models/checkpoints/",
         name_prefix=MODEL_NAME,
     )
@@ -122,44 +107,41 @@ if __name__ == "__main__":
         best_model_save_path="models/best/",
         log_path=LOG_PATH,
         eval_freq=EVAL_FREQ,
-        n_eval_episodes=10,            # FIX 7: was 5 — too noisy for a meaningful
-                                        # success rate signal, 10 minimum.
+        n_eval_episodes=5,      # Kept low to minimize training pauses
+                                # Final reported numbers use evaluate.py (20 episodes)
         deterministic=True,
     )
 
-    # --- 3. PPO model ---
     model = PPO(
         "MlpPolicy",
         train_env,
         n_steps=N_STEPS,
         batch_size=BATCH_SIZE,
         n_epochs=10,
-        learning_rate=3e-4,
+        learning_rate=1e-4,   # was 3e-4
         gamma=0.99,
         gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
+        clip_range=0.1,       # was 0.2 
+        ent_coef=0.01,          # 0.05 caused std to grow unboundedly — back to 0.01
         vf_coef=0.5,
         max_grad_norm=0.5,
-        device=DEVICE,      # <-- GPU. Env stepping stays on CPU automatically.
+        device=DEVICE,
         verbose=1,
         tensorboard_log=LOG_PATH,
     )
 
-    # --- 4. Train ---
     print(f"Training: {TOTAL_TIMESTEPS:,} steps | {N_ENVS} envs | "
           f"{NUM_TRAIN_SCENARIOS} scenarios | device={DEVICE}")
     model.learn(
         total_timesteps=TOTAL_TIMESTEPS,
-        callback=[sync_cb, checkpoint_cb, eval_cb],
+        callback=[sync_save_cb, eval_cb, checkpoint_cb],  # sync_save_cb must be first
         progress_bar=True,
     )
     print("--- Training Finished ---")
 
-    # --- 5. Save ---
     model.save(MODEL_SAVE_PATH)
     train_env.save(VECNORM_SAVE_PATH)
-    print(f"Model: {MODEL_SAVE_PATH}.zip")
+    print(f"Model:   {MODEL_SAVE_PATH}.zip")
     print(f"VecNorm: {VECNORM_SAVE_PATH}")
 
     train_env.close()
