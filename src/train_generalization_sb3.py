@@ -242,7 +242,7 @@ if __name__ == "__main__":
         "eval_num_workers":      5,
         "evaluation_interval":   2,
         "evaluation_num_episodes": 40,
-        "total_timesteps":       10_000_000,
+        "total_timesteps":       5_000_000,
         "checkpoint_freq":       10,
         "use_gpu":               args.num_gpus > 0,
     }

@@ -230,16 +230,24 @@ class CurriculumCallback(BaseCallback):
 
 class CurriculumEvalCallback(EvalCallback):
     """
-    Thin wrapper around EvalCallback that notifies CurriculumCallback
-    after each evaluation so it can check the reward threshold.
+    Wraps EvalCallback and notifies CurriculumCallback ONLY when a real
+    evaluation has just completed (i.e. last_mean_reward changed this step).
+    Without this guard, on_eval_end fires every env step — thousands of
+    times per second — producing the -inf spam and burning CPU.
     """
     def __init__(self, curriculum_cb, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.curriculum_cb = curriculum_cb
+        self._prev_mean_reward = None   # Track last reported reward
 
     def _on_step(self) -> bool:
         result = super()._on_step()
-        if self.last_mean_reward is not None:
+        # last_mean_reward only changes when EvalCallback actually ran an eval.
+        # By comparing to _prev_mean_reward we fire on_eval_end exactly once
+        # per completed evaluation, not once per env step.
+        if (self.last_mean_reward is not None and
+                self.last_mean_reward != self._prev_mean_reward):
+            self._prev_mean_reward = self.last_mean_reward
             self.curriculum_cb.on_eval_end(self.last_mean_reward)
         return result
 
