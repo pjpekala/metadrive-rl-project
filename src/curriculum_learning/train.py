@@ -23,7 +23,7 @@ BATCH_SIZE      = 512
 TRAIN_SEED      = 0
 EVAL_SEED       = 5000
 EVAL_FREQ_STEPS = 100_000    # Evaluate every 100k env steps
-N_EVAL_EPISODES = 5          # Quick eval; full eval uses evaluate.py (20 episodes)
+N_EVAL_EPISODES = 20   # was 5 — gives 5% resolution on rates
 
 # ---------------------------------------------------------------------------
 # Curriculum stages
@@ -36,9 +36,9 @@ DISCRETE_CURRICULUM = [
         "num_scenarios":         5,
         "traffic_density":       0.0,
         # Loose reward floor — success/survival rates are what really matter
-        "reward_threshold":      250,
+        "reward_threshold":      225,
         "min_survival_rate":     1.0,
-        "min_success_rate":      0.9,   # 90%: one failure in 10 is acceptable
+        "min_success_rate":      0.8,   # 80%: one failure in 10 is acceptable
         "discrete_action":       True,
         "discrete_steering_dim": 3,
         "discrete_throttle_dim": 3,
@@ -57,69 +57,77 @@ DISCRETE_CURRICULUM = [
     },
 ]
 
+# train.py — revised stage definitions
 CONTINUOUS_CURRICULUM = [
     {
-        "name":                  "Stage 1 — Straight roads, no traffic (continuous warm-up)",
-        "map":                   3,
-        "num_scenarios":         5,
-        "traffic_density":       0.0,
-        # Looser thresholds to clear the continuous control bottleneck quickly
-        "reward_threshold":      200,
-        "min_survival_rate":     0.8,     # 80% survival: learn basics faster
-        "min_success_rate":      0.6,     # 60% success: get to curves sooner
-        "discrete_action":       False,
+        "name":              "Stage 1 — Straight roads, no traffic (continuous warm-up)",
+        "map":               3,
+        "num_scenarios":     20,    # was 5
+        "traffic_density":   0.0,
+        "reward_threshold":  200,
+        "min_survival_rate": 0.95,
+        "min_success_rate":  0.85,
+        "discrete_action":   False,
         "discrete_steering_dim": None,
         "discrete_throttle_dim": None,
     },
     {
-        "name":                  "Stage 2 — Curves, no traffic (continuous)",
-        "map":                   4,
-        "num_scenarios":         10,
-        "traffic_density":       0.0,
-        # Build steering control on more complex roads
-        "reward_threshold":      220,
-        "min_survival_rate":     0.85,    # Expect improvement
-        "min_success_rate":      0.72,    # Slightly harder
-        "discrete_action":       False,
+        "name":              "Stage 2 — Curves, no traffic",
+        "map":               4,
+        "num_scenarios":     50,    # was 10
+        "traffic_density":   0.0,
+        "reward_threshold":  220,
+        "min_survival_rate": 0.90,
+        "min_success_rate":  0.80,
+        "discrete_action":   False,
         "discrete_steering_dim": None,
         "discrete_throttle_dim": None,
     },
     {
-        "name":                  "Stage 3 — Mixed roads, light traffic (0.05 density)",
-        "map":                   5,
-        "num_scenarios":         15,
-        "traffic_density":       0.05,    # Stagger traffic increase
-        # Adjust reward down slightly (traffic creates chaos)
-        "reward_threshold":      180,
-        "min_survival_rate":     0.8,
-        "min_success_rate":      0.65,
-        "discrete_action":       False,
+        "name":              "Stage 3 — Mixed roads, light traffic (0.05)",
+        "map":               5,
+        "num_scenarios":     100,   # was 15
+        "traffic_density":   0.05,
+        "reward_threshold":  180,
+        "min_survival_rate": 0.80,
+        "min_success_rate":  0.65,
+        "discrete_action":   False,
         "discrete_steering_dim": None,
         "discrete_throttle_dim": None,
     },
     {
-        "name":                  "Stage 4 — Mixed roads, moderate traffic (0.1 density)",
-        "map":                   5,
-        "num_scenarios":         15,
-        "traffic_density":       0.1,
-        # Higher density, expect lower success but maintain survival
-        "reward_threshold":      160,
-        "min_survival_rate":     0.75,
-        "min_success_rate":      0.6,
-        "discrete_action":       False,
+        "name":              "Stage 4 — Mixed roads, moderate traffic (0.1)",
+        "map":               5,
+        "num_scenarios":     100,   # was 15
+        "traffic_density":   0.1,
+        "reward_threshold":  160,
+        "min_survival_rate": 0.75,
+        "min_success_rate":  0.60,
+        "discrete_action":   False,
         "discrete_steering_dim": None,
         "discrete_throttle_dim": None,
     },
     {
-        "name":                  "Stage 5 — Random maps, moderate traffic",
-        "map":                   7,
-        "num_scenarios":         20,
-        "traffic_density":       0.2,
-        # Final stage: agent should be robust. Relaxed thresholds.
-        "reward_threshold":      float("inf"),
-        "min_survival_rate":     0.0,
-        "min_success_rate":      0.0,
-        "discrete_action":       False,
+        "name":              "Stage 5 — Random maps, moderate traffic",
+        "map":               7,
+        "num_scenarios":     200,   # was 20
+        "traffic_density":   0.2,
+        "reward_threshold":  200,
+        "min_survival_rate": 0.75,
+        "min_success_rate":  0.70,
+        "discrete_action":   False,
+        "discrete_steering_dim": None,
+        "discrete_throttle_dim": None,
+    },
+    {
+        "name":              "Stage 6 — Random maps, heavy traffic",
+        "map":               7,
+        "num_scenarios":     500,   # was 100
+        "traffic_density":   0.5,
+        "reward_threshold":  float("inf"),
+        "min_survival_rate": 0.0,
+        "min_success_rate":  0.0,
+        "discrete_action":   False,
         "discrete_steering_dim": None,
         "discrete_throttle_dim": None,
     },
@@ -152,7 +160,7 @@ def run_continuous():
         n_envs=N_ENVS,
         n_steps=N_STEPS,
         batch_size=BATCH_SIZE,
-        total_timesteps=35_000_000,  # Reduced from 40M since early stages easier now
+        total_timesteps=50_000_000,
         train_seed=TRAIN_SEED,
         eval_seed=EVAL_SEED,
         device=DEVICE,
