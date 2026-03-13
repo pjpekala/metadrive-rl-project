@@ -31,6 +31,11 @@ class Stage:
     discrete_throttle_dim: int = 3
     horizon: int = 1000
     
+    random_lane_width: bool = False
+    random_lane_num: bool = False
+    random_agent_model: bool = False
+    random_traffic: bool = False
+    
     @property
     def is_discrete(self) -> bool:
         return self.discrete_action if self.discrete_action is not None else False
@@ -47,7 +52,7 @@ class Seeds:
 @dataclass
 class TrainingConfig:
     """Main training hyperparameters"""
-    n_envs: int = 4
+    n_envs: int = 8
     n_steps: int = 2048
     batch_size: int = 512
     discrete_timesteps: int = 10_000_000
@@ -58,7 +63,7 @@ class TrainingConfig:
     seeds: Seeds = field(default_factory=Seeds)
     
     policy: str = "MlpPolicy"
-    net_arch: dict = field(default_factory=lambda: dict(pi=[256, 256], vf=[256, 256]))
+    net_arch: dict = field(default_factory=lambda: dict(pi=[512, 256], vf=[512, 256]))
     
     learning_rate: float = 1e-4
     gamma: float = 0.99
@@ -78,9 +83,9 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=20,
         num_scenarios_eval=20,
         traffic_density=0.0,
-        min_success_rate=0.85,
-        min_survival_rate=0.90,
-        reward_threshold=95,
+        min_success_rate=0.80,
+        min_survival_rate=0.85,
+        reward_threshold=120,
         discrete_action=False,
     ),
     Stage(
@@ -89,21 +94,23 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=30,
         num_scenarios_eval=30,
         traffic_density=0.0,
-        min_success_rate=0.65,
-        min_survival_rate=0.80,
-        reward_threshold=100,
+        min_success_rate=0.80,
+        min_survival_rate=0.85,
+        reward_threshold=120,
         discrete_action=False,
+        random_lane_width=True,
     ),
     Stage(
         name="Stage 3 — Straight roads (SSS), light traffic",
         map="SSS",
         num_scenarios_train=40,
         num_scenarios_eval=40,
-        traffic_density=0.05,
-        min_success_rate=0.65,
-        min_survival_rate=0.80,
-        reward_threshold=100,
+        traffic_density=0.15,
+        min_success_rate=0.80,
+        min_survival_rate=0.85,
+        reward_threshold=120,
         discrete_action=False,
+        random_lane_width=True,
     ),
     Stage(
         name="Stage 4 — Curves (SCC), no traffic",
@@ -111,10 +118,11 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=50,
         num_scenarios_eval=50,
         traffic_density=0.0,
-        min_success_rate=0.60,
-        min_survival_rate=0.80,
-        reward_threshold=100,
+        min_success_rate=0.75,
+        min_survival_rate=0.85,
+        reward_threshold=140,
         discrete_action=False,
+        random_lane_width=True,
     ),
     Stage(
         name="Stage 5 — Curves (SCC), light traffic",
@@ -122,10 +130,12 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=75,
         num_scenarios_eval=75,
         traffic_density=0.05,
-        min_success_rate=0.60,
-        min_survival_rate=0.75,
-        reward_threshold=100,
+        min_success_rate=0.70,
+        min_survival_rate=0.80,
+        reward_threshold=140,
         discrete_action=False,
+        random_lane_width=True,
+        random_lane_num=True,
     ),
     Stage(
         name="Stage 6 — Mixed (XCSO), light traffic",
@@ -133,10 +143,12 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=100,
         num_scenarios_eval=100,
         traffic_density=0.05,
-        min_success_rate=0.55,
-        min_survival_rate=0.70,
-        reward_threshold=100,
+        min_success_rate=0.65,
+        min_survival_rate=0.75,
+        reward_threshold=140,
         discrete_action=False,
+        random_lane_width=True,
+        random_lane_num=True,
     ),
     Stage(
         name="Stage 7 — Mixed (XCSO), moderate traffic",
@@ -144,10 +156,14 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=150,
         num_scenarios_eval=150,
         traffic_density=0.1,
-        min_success_rate=0.50,
-        min_survival_rate=0.70,
-        reward_threshold=100,
+        min_success_rate=0.65,
+        min_survival_rate=0.75,
+        reward_threshold=160,
         discrete_action=False,
+        random_lane_width=True,
+        random_lane_num=True,
+        random_agent_model=True,
+        random_traffic=True,
     ),
     Stage(
         name="Stage 8 — Random maps (5 blocks), moderate traffic",
@@ -155,10 +171,14 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=200,
         num_scenarios_eval=200,
         traffic_density=0.15,
-        min_success_rate=0.50,
-        min_survival_rate=0.70,
-        reward_threshold=125,
+        min_success_rate=0.65,
+        min_survival_rate=0.75,
+        reward_threshold=160,
         discrete_action=False,
+        random_lane_width=True,
+        random_lane_num=True,
+        random_agent_model=True,
+        random_traffic=True,
     ),
     Stage(
         name="Stage 9 — Random maps (6 blocks), moderate traffic",
@@ -166,10 +186,14 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=300,
         num_scenarios_eval=300,
         traffic_density=0.25,
-        min_success_rate=0.50,
-        min_survival_rate=0.70,
-        reward_threshold=125,
+        min_success_rate=0.65,
+        min_survival_rate=0.75,
+        reward_threshold=180,
         discrete_action=False,
+        random_lane_width=True,
+        random_lane_num=True,
+        random_agent_model=True,
+        random_traffic=True,
     ),
     Stage(
         name="Stage 10 — Random maps (6 blocks), heavy traffic",
@@ -177,10 +201,14 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=400,
         num_scenarios_eval=400,
         traffic_density=0.35,
-        min_success_rate=0.50,
+        min_success_rate=0.60,
         min_survival_rate=0.70,
-        reward_threshold=130,
+        reward_threshold=180,
         discrete_action=False,
+        random_lane_width=True,
+        random_lane_num=True,
+        random_agent_model=True,
+        random_traffic=True,
     ),
     Stage(
         name="Stage 11 — Random maps (7 blocks), heavy traffic",
@@ -188,10 +216,14 @@ CONTINUOUS_CURRICULUM = [
         num_scenarios_train=500,
         num_scenarios_eval=500,
         traffic_density=0.40,
-        min_success_rate=0.45,
-        min_survival_rate=0.65,
-        reward_threshold=140,
+        min_success_rate=0.60,
+        min_survival_rate=0.70,
+        reward_threshold=200,
         discrete_action=False,
+        random_lane_width=True,
+        random_lane_num=True,
+        random_agent_model=True,
+        random_traffic=True,
     ),
     Stage(
         name="Stage 12 — Random maps (9 blocks), heavy traffic (final)",
@@ -204,6 +236,10 @@ CONTINUOUS_CURRICULUM = [
         reward_threshold=float("inf"),
         discrete_action=False,
         horizon=1200,
+        random_lane_width=True,
+        random_lane_num=True,
+        random_agent_model=True,
+        random_traffic=True,
     ),
 ]
 

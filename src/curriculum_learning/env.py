@@ -41,11 +41,11 @@ def build_metadrive_config(
         "traffic_density": stage.traffic_density,
         
         "driving_reward": 1.0,
-        "speed_reward": 0.1,
+        "speed_reward": 0.2,
         "use_lateral_reward": True,
-        "success_reward": 10.0,
-        "out_of_road_penalty": 5.0,
-        "crash_vehicle_penalty": 5.0,
+        "success_reward": 30.0,
+        "out_of_road_penalty": 10.0,
+        "crash_vehicle_penalty": 10.0,
         
         "out_of_road_done": True,
         "crash_vehicle_done": True,
@@ -56,6 +56,11 @@ def build_metadrive_config(
         "log_level": 50,
         
         "discrete_action": stage.is_discrete,
+        
+        "random_lane_width": stage.random_lane_width,
+        "random_lane_num": stage.random_lane_num,
+        "random_agent_model": stage.random_agent_model,
+        "random_traffic": stage.random_traffic,
     }
     
     if stage.is_discrete:
