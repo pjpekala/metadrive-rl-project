@@ -15,6 +15,7 @@ dependencies = [
     "gym>=0.26.2",
     "scipy",
     "lz4",
+    "tensorboard",
 ]
 
 [project.optional-dependencies]

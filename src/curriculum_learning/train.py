@@ -1,190 +1,235 @@
 """
-train.py
+Main training script for curriculum learning.
 
-Central training script. All configuration lives here.
-Run with:
-
-    uv run src/train.py discrete
-    uv run src/train.py continuous
-    uv run src/train.py all        # runs discrete then continuous sequentially
+Usage:
+    uv run -m src.curriculum_learning.train discrete
+    uv run -m src.curriculum_learning.train continuous
+    uv run -m src.curriculum_learning.train all        # runs discrete then continuous sequentially
 """
 
 import sys
-from curriculum_lib import run_training
+import os
 
-# ---------------------------------------------------------------------------
-# Hyperparameters
-# ---------------------------------------------------------------------------
+# Handle both direct execution and module import
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+    from src.curriculum_learning.config import CONTINUOUS_CURRICULUM, DISCRETE_CURRICULUM, CURRICULA, TrainingConfig
+    from src.curriculum_learning.env import make_env, make_inline_eval_env
+    from src.curriculum_learning.callbacks import CurriculumCallback, CurriculumEvalCallback, EarlyStoppingCallback, CheckpointCallback
+else:
+    from .config import CONTINUOUS_CURRICULUM, DISCRETE_CURRICULUM, CURRICULA, TrainingConfig
+    from .env import make_env, make_inline_eval_env
+    from .callbacks import CurriculumCallback, CurriculumEvalCallback, EarlyStoppingCallback, CheckpointCallback
 
-DEVICE          = "cpu"
-N_ENVS          = 4
-N_STEPS         = 2048
-BATCH_SIZE      = 512
-TRAIN_SEED      = 0
-EVAL_SEED       = 5000
-EVAL_FREQ_STEPS = 100_000    # Evaluate every 100k env steps
-N_EVAL_EPISODES = 20   # was 5 — gives 5% resolution on rates
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
-# ---------------------------------------------------------------------------
-# Curriculum stages
-# ---------------------------------------------------------------------------
 
-DISCRETE_CURRICULUM = [
-    {
-        "name":                  "Stage 0 — Straight roads, no traffic",
-        "map":                   3,
-        "num_scenarios":         5,
-        "traffic_density":       0.0,
-        # Loose reward floor — success/survival rates are what really matter
-        "reward_threshold":      225,
-        "min_survival_rate":     1.0,
-        "min_success_rate":      0.8,   # 80%: one failure in 10 is acceptable
-        "discrete_action":       True,
-        "discrete_steering_dim": 3,
-        "discrete_throttle_dim": 3,
-    },
-    {
-        "name":                  "Stage 1 — Curves added, no traffic",
-        "map":                   4,
-        "num_scenarios":         10,
-        "traffic_density":       0.0,
-        "reward_threshold":      200,
-        "min_survival_rate":     1.0,
-        "min_success_rate":      0.9,
-        "discrete_action":       True,
-        "discrete_steering_dim": 5,
-        "discrete_throttle_dim": 3,
-    },
-]
+def transfer_trunk(source_ckpt: str, source_vecnorm: str, target_env, stage_holder, train_seed: int, ppo_kwargs: dict):
+    """Load a checkpoint and transfer MLP trunk weights to a new model."""
+    print(f"[transfer_trunk] Loading source checkpoint: {source_ckpt}")
+    
+    tmp_vec = SubprocVecEnv([make_env(train_seed, 0, stage_holder)])
+    tmp_env = VecNormalize.load(source_vecnorm, tmp_vec)
+    source_model = PPO.load(source_ckpt, env=tmp_env, device=ppo_kwargs["device"])
+    trunk_state = source_model.policy.mlp_extractor.state_dict()
+    obs_rms = tmp_env.obs_rms
+    tmp_env.close()
+    
+    model = PPO("MlpPolicy", target_env, **ppo_kwargs)
+    model.policy.mlp_extractor.load_state_dict(trunk_state)
+    target_env.obs_rms = obs_rms
+    
+    print("[transfer_trunk] Trunk weights transferred. Output head initialized fresh.")
+    return model
 
-# train.py — revised stage definitions
-CONTINUOUS_CURRICULUM = [
-    {
-        "name":              "Stage 1 — Straight roads, no traffic (continuous warm-up)",
-        "map":               3,
-        "num_scenarios":     20,    # was 5
-        "traffic_density":   0.0,
-        "reward_threshold":  200,
-        "min_survival_rate": 0.95,
-        "min_success_rate":  0.85,
-        "discrete_action":   False,
-        "discrete_steering_dim": None,
-        "discrete_throttle_dim": None,
-    },
-    {
-        "name":              "Stage 2 — Curves, no traffic",
-        "map":               4,
-        "num_scenarios":     50,    # was 10
-        "traffic_density":   0.0,
-        "reward_threshold":  220,
-        "min_survival_rate": 0.90,
-        "min_success_rate":  0.80,
-        "discrete_action":   False,
-        "discrete_steering_dim": None,
-        "discrete_throttle_dim": None,
-    },
-    {
-        "name":              "Stage 3 — Mixed roads, light traffic (0.05)",
-        "map":               5,
-        "num_scenarios":     100,   # was 15
-        "traffic_density":   0.05,
-        "reward_threshold":  180,
-        "min_survival_rate": 0.80,
-        "min_success_rate":  0.65,
-        "discrete_action":   False,
-        "discrete_steering_dim": None,
-        "discrete_throttle_dim": None,
-    },
-    {
-        "name":              "Stage 4 — Mixed roads, moderate traffic (0.1)",
-        "map":               5,
-        "num_scenarios":     100,   # was 15
-        "traffic_density":   0.1,
-        "reward_threshold":  160,
-        "min_survival_rate": 0.75,
-        "min_success_rate":  0.60,
-        "discrete_action":   False,
-        "discrete_steering_dim": None,
-        "discrete_throttle_dim": None,
-    },
-    {
-        "name":              "Stage 5 — Random maps, moderate traffic",
-        "map":               7,
-        "num_scenarios":     200,   # was 20
-        "traffic_density":   0.2,
-        "reward_threshold":  200,
-        "min_survival_rate": 0.75,
-        "min_success_rate":  0.70,
-        "discrete_action":   False,
-        "discrete_steering_dim": None,
-        "discrete_throttle_dim": None,
-    },
-    {
-        "name":              "Stage 6 — Random maps, heavy traffic",
-        "map":               7,
-        "num_scenarios":     500,   # was 100
-        "traffic_density":   0.5,
-        "reward_threshold":  float("inf"),
-        "min_survival_rate": 0.0,
-        "min_success_rate":  0.0,
-        "discrete_action":   False,
-        "discrete_steering_dim": None,
-        "discrete_throttle_dim": None,
-    },
-]
 
-# ---------------------------------------------------------------------------
-# Phase runners
-# ---------------------------------------------------------------------------
+def run_training(
+    curriculum,
+    run_name: str,
+    config: TrainingConfig,
+    total_timesteps: int,
+    trunk_source_ckpt: str = None,
+    trunk_source_vecnorm: str = None,
+):
+    """Run curriculum training for a given curriculum and run name."""
+    model_dir = f"models/{run_name}"
+    log_path = f"logs/run_{run_name}"
+    best_dir = f"models/best_{run_name}"
+    ckpt_dir = f"models/checkpoints_{run_name}"
+    checkpoint_path = f"{best_dir}/best_model.zip"
+    vecnorm_ckpt_path = f"{best_dir}/vecnorm.pkl"
+    final_model_path = f"{model_dir}/final_model"
+    final_vecnorm_path = f"{model_dir}/final_vecnorm.pkl"
+    
+    for d in [model_dir, log_path, best_dir, ckpt_dir, "logs"]:
+        os.makedirs(d, exist_ok=True)
+    
+    eval_freq = config.eval_freq_steps // config.n_envs
+    
+    ppo_kwargs = dict(
+        n_steps=config.n_steps,
+        batch_size=config.batch_size,
+        n_epochs=config.n_epochs,
+        learning_rate=config.learning_rate,
+        gamma=config.gamma,
+        gae_lambda=config.gae_lambda,
+        clip_range=config.clip_range,
+        ent_coef=config.ent_coef,
+        vf_coef=config.vf_coef,
+        max_grad_norm=config.max_grad_norm,
+        target_kl=config.target_kl,
+        device=config.device,
+        verbose=1,
+        tensorboard_log=log_path,
+        policy_kwargs=dict(net_arch=config.net_arch),
+    )
+    
+    stage_holder = [curriculum[0]]
+    print(f"\n[{run_name}] Starting at: {stage_holder[0].name}")
+    print(f"[{run_name}] Device: {config.device} | Envs: {config.n_envs} | Steps: {total_timesteps:,}")
+    
+    train_vec = SubprocVecEnv([
+        make_env(config.seeds.train, i, stage_holder) for i in range(config.n_envs)
+    ])
+    
+    eval_vec = SubprocVecEnv([make_inline_eval_env(config.seeds.inline_eval, stage_holder)])
+    
+    if os.path.exists(checkpoint_path) and os.path.exists(vecnorm_ckpt_path):
+        print(f"[{run_name}] Resuming from {checkpoint_path}")
+        train_env = VecNormalize.load(vecnorm_ckpt_path, train_vec)
+        train_env.training = True
+        train_env.norm_reward = True
+        model = PPO.load(
+            checkpoint_path,
+            env=train_env,
+            device=config.device,
+            custom_objects={
+                "learning_rate": ppo_kwargs["learning_rate"],
+                "clip_range": ppo_kwargs["clip_range"],
+                "n_steps": config.n_steps,
+                "batch_size": config.batch_size,
+            }
+        )
+    elif trunk_source_ckpt and os.path.exists(trunk_source_ckpt):
+        print(f"[{run_name}] Transferring trunk from {trunk_source_ckpt}")
+        train_env = VecNormalize(
+            train_vec,
+            norm_obs=True,
+            norm_reward=True,
+            clip_obs=10.0,
+            clip_reward=10.0,
+        )
+        model = transfer_trunk(
+            source_ckpt=trunk_source_ckpt,
+            source_vecnorm=trunk_source_vecnorm,
+            target_env=train_env,
+            stage_holder=stage_holder,
+            train_seed=config.seeds.train,
+            ppo_kwargs=ppo_kwargs,
+        )
+    else:
+        print(f"[{run_name}] No checkpoint found — training from scratch")
+        train_env = VecNormalize(
+            train_vec,
+            norm_obs=True,
+            norm_reward=True,
+            clip_obs=10.0,
+            clip_reward=10.0,
+        )
+        model = PPO("MlpPolicy", train_env, **ppo_kwargs)
+    
+    eval_env = VecNormalize(
+        eval_vec,
+        norm_obs=True,
+        norm_reward=False,
+        clip_obs=10.0,
+        training=False,
+    )
+    eval_env.obs_rms = train_env.obs_rms
+    
+    curriculum_cb = CurriculumCallback(
+        train_env=train_env,
+        eval_env=eval_env,
+        eval_freq=eval_freq,
+        stage_holder=stage_holder,
+        curriculum=curriculum,
+        vecnorm_ckpt_path=vecnorm_ckpt_path,
+        verbose=1,
+    )
+    
+    early_stopping_cb = EarlyStoppingCallback(
+        curriculum_cb=curriculum_cb,
+        patience=2,
+        verbose=1,
+    )
+    
+    eval_cb = CurriculumEvalCallback(
+        curriculum_cb=curriculum_cb,
+        early_stopping_cb=early_stopping_cb,
+        eval_env=eval_env,
+        best_model_save_path=best_dir,
+        log_path=log_path,
+        eval_freq=eval_freq,
+        n_eval_episodes=config.n_eval_episodes,
+        deterministic=True,
+    )
+    
+    checkpoint_cb = CheckpointCallback(
+        save_freq=eval_freq,
+        save_path=ckpt_dir,
+        name_prefix=f"ppo_{run_name}",
+    )
+    
+    model.learn(
+        total_timesteps=total_timesteps,
+        callback=[curriculum_cb, eval_cb, checkpoint_cb, early_stopping_cb],
+        progress_bar=True,
+        reset_num_timesteps=False,
+    )
+    print(f"\n[{run_name}] Training finished.")
+    
+    model.save(final_model_path)
+    train_env.save(final_vecnorm_path)
+    print(f"[{run_name}] Model:   {final_model_path}.zip")
+    print(f"[{run_name}] VecNorm: {final_vecnorm_path}")
+    
+    train_env.close()
+    eval_env.close()
+
 
 def run_discrete():
+    config = TrainingConfig()
     run_training(
         curriculum=DISCRETE_CURRICULUM,
         run_name="discrete",
-        n_envs=N_ENVS,
-        n_steps=N_STEPS,
-        batch_size=BATCH_SIZE,
-        total_timesteps=50_000_000,
-        train_seed=TRAIN_SEED,
-        eval_seed=EVAL_SEED,
-        device=DEVICE,
-        eval_freq_steps=EVAL_FREQ_STEPS,
-        n_eval_episodes=N_EVAL_EPISODES,
+        config=config,
+        total_timesteps=config.discrete_timesteps,
     )
 
 
 def run_continuous():
+    config = TrainingConfig()
     run_training(
         curriculum=CONTINUOUS_CURRICULUM,
         run_name="continuous",
-        n_envs=N_ENVS,
-        n_steps=N_STEPS,
-        batch_size=BATCH_SIZE,
-        total_timesteps=50_000_000,
-        train_seed=TRAIN_SEED,
-        eval_seed=EVAL_SEED,
-        device=DEVICE,
-        eval_freq_steps=EVAL_FREQ_STEPS,
-        n_eval_episodes=N_EVAL_EPISODES,
-        # Transfer trunk from discrete phase if available
+        config=config,
+        total_timesteps=config.continuous_timesteps,
         trunk_source_ckpt="models/best_discrete/best_model.zip",
         trunk_source_vecnorm="models/best_discrete/vecnorm.pkl",
     )
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
 PHASES = {
-    "discrete":   run_discrete,
+    "discrete": run_discrete,
     "continuous": run_continuous,
-    "all":        lambda: (run_discrete(), run_continuous()),
+    "all": lambda: (run_discrete(), run_continuous()),
 }
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in PHASES:
         print(f"Usage: python train.py [{' | '.join(PHASES)}]")
         sys.exit(1)
-
+    
     PHASES[sys.argv[1]]()

@@ -8,8 +8,24 @@ _This project installs the MetaDrive simulator directly from its GitHub reposito
 
 ### Prerequisites
 
-- Python 3.9+
-- [uv](https://github.com/astral-sh/uv) (`pip install uv`)
+- Python 3.11+
+- [uv](https://github.com/astral-sh/uv) - package manager
+- [just](https://github.com/casey/just) - command runner
+
+#### Installing just
+
+```bash
+# macOS
+brew install just
+
+# Windows (using winget)
+winget install just.just
+
+# Or via cargo/rust
+cargo install just
+
+# Or download a release binary from https://github.com/casey/just/releases
+```
 
 ### Installation
 
@@ -26,6 +42,75 @@ _This project installs the MetaDrive simulator directly from its GitHub reposito
     ```bash
     uv sync
     ```
+
+## Usage
+
+### Quick Start
+
+```bash
+# Train discrete (simpler action space)
+just train discrete
+
+# Train continuous (full action space, uses discrete as trunk)
+just train continuous
+
+# Evaluate trained model
+just eval continuous
+```
+
+### Training
+
+| Command | Description |
+|---------|-------------|
+| `just train discrete` | Train with discrete actions (steering/throttle discretized) |
+| `just train continuous` | Train with continuous actions (uses discrete as trunk) |
+| `just train all` | Train discrete then continuous sequentially |
+
+Training saves to:
+- Best model: `models/best_{phase}/best_model.zip`
+- Checkpoints: `models/checkpoints_{phase}/`
+- Final model: `models/{phase}/final_model.zip`
+
+### Evaluation
+
+| Command | Description |
+|---------|-------------|
+| `just eval continuous` | Evaluate on final stage (default) |
+| `just eval continuous --stage 2` | Evaluate on specific stage |
+| `just eval continuous --all-stages` | Sweep all stages |
+| `just eval continuous --render` | Watch the agent drive |
+
+### Monitoring
+
+```bash
+just tensorboard  # Opens TensorBoard at localhost:6006
+```
+
+### Curriculum
+
+The training automatically progresses through stages:
+
+**Discrete:**
+- Stage 0: Straight roads, no traffic
+- Stage 1: Curves added, no traffic
+
+**Continuous:**
+- Stage 1: Straight roads, no traffic (warm-up)
+- Stage 2: Curves, no traffic
+- Stage 3: Mixed roads, light traffic (0.05 density)
+- Stage 4: Mixed roads, moderate traffic (0.1 density)
+- Stage 5: Random maps, moderate traffic (0.2 density)
+- Stage 6: Random maps, heavy traffic (0.5 density)
+
+Agent advances when success_rate and survival_rate thresholds are met.
+
+### Configuration
+
+Edit `src/curriculum_learning/config.py` to customize:
+- Stage definitions (maps, scenarios, traffic density)
+- Advancement thresholds (min_success_rate, min_survival_rate)
+- Training hyperparameters (learning rate, batch size, etc.)
+- Model architecture (network layers)
 
 ## 1. Problem Statement
 
