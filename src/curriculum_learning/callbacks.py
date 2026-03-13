@@ -1,7 +1,6 @@
 """
 Training callbacks for curriculum learning.
 
-Simplified from the original implementation while maintaining functionality:
 - CurriculumCallback: tracks stage progress and syncs VecNormalize
 - CurriculumEvalCallback: runs evaluation and determines stage advancement
 - EarlyStoppingCallback: stops training when final stage thresholds are met
