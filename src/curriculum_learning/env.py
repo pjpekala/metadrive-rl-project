@@ -51,7 +51,7 @@ def build_metadrive_config(
         "crash_vehicle_done": True,
         "crash_object_done": True,
         
-        "horizon": 1000,
+        "horizon": stage.horizon,
         "use_render": use_render,
         "log_level": 50,
         

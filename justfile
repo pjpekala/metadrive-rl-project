@@ -25,6 +25,16 @@ clean:
     rm -rf models/checkpoints_* models/best_*/ models/*/final_*.zip models/*/final_vecnorm.pkl
     rm -rf logs/run_*/
 
+# Clean discrete model weights and logs
+clean-discrete:
+    rm -rf models/checkpoints_discrete models/best_discrete models/discrete/
+    rm -rf logs/run_discrete/
+
+# Clean continuous model weights and logs
+clean-continuous:
+    rm -rf models/checkpoints_continuous models/best_continuous models/continuous/
+    rm -rf logs/run_continuous/
+
 # Quick replay - watch trained agent drive
 replay phase="continuous":
     uv run -m src.curriculum_learning.evaluate {{phase}} --render
