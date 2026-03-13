@@ -91,8 +91,8 @@ just tensorboard  # Opens TensorBoard at localhost:6006
 The training automatically progresses through stages:
 
 **Discrete:**
-- Stage 0: Straight roads, no traffic
-- Stage 1: Curves added, no traffic
+- Stage 1: Straight roads, no traffic
+- Stage 2: Curves added, no traffic
 
 **Continuous:**
 - Stage 1: Straight roads, no traffic (warm-up)

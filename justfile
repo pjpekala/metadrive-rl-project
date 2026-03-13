@@ -18,7 +18,7 @@ eval phase="continuous" *args="":
 
 # Open TensorBoard
 tensorboard:
-    uv run tensorboard --logdir=logs/
+    uv run tensorboard --logdir=logs/ --port=6006 
 
 # Clean old models and logs (careful!)
 clean:

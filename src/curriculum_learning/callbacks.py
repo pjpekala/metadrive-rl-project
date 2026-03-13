@@ -46,7 +46,7 @@ class CurriculumCallback(BaseCallback):
             self.eval_env.training = False
             self.train_env.save(self.vecnorm_ckpt_path)
         
-        self.logger.record("curriculum/stage", self.current_stage_idx)
+        self.logger.record("curriculum/stage", self.current_stage_idx + 1)
         return True
     
     def on_eval_end(self, mean_reward: float, survival_rate: float, success_rate: float) -> bool:
@@ -69,7 +69,7 @@ class CurriculumCallback(BaseCallback):
         print(f"  Survival: {survival_rate*100:.0f}% (need >= {stage.min_survival_rate*100:.0f}%) — {'✓' if survival_ok else '✗'}")
         print(f"  Success:  {success_rate*100:.0f}% (need >= {stage.min_success_rate*100:.0f}%) — {'✓' if success_ok else '✗'}")
         
-        self.logger.record("curriculum/stage", self.current_stage_idx)
+        self.logger.record("curriculum/stage", self.current_stage_idx + 1)
         self.logger.record("curriculum/survival_threshold", stage.min_survival_rate)
         self.logger.record("curriculum/success_threshold", stage.min_success_rate)
         self.logger.dump(self.num_timesteps)
