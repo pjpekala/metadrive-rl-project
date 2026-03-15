@@ -51,7 +51,7 @@ cargo install just
 # Train discrete (simpler action space)
 just train discrete
 
-# Train continuous (full action space, uses discrete as trunk)
+# Train continuous (full action space, uses discrete trunk)
 just train continuous
 
 # Evaluate trained model
@@ -63,7 +63,7 @@ just eval continuous
 | Command | Description |
 |---------|-------------|
 | `just train discrete` | Train with discrete actions (steering/throttle discretized) |
-| `just train continuous` | Train with continuous actions (uses discrete as trunk) |
+| `just train continuous` | Train with continuous actions (transfers trunk from discrete) |
 | `just train all` | Train discrete then continuous sequentially |
 
 Training saves to:
@@ -76,9 +76,11 @@ Training saves to:
 | Command | Description |
 |---------|-------------|
 | `just eval continuous` | Evaluate on final stage (default) |
-| `just eval continuous --stage 2` | Evaluate on specific stage |
+| `just eval continuous --stage 2` | Evaluate on specific stage (1-based, see below) |
 | `just eval continuous --all-stages` | Sweep all stages |
 | `just eval continuous --render` | Watch the agent drive |
+
+**Stage indexing is 1-based** (e.g., `--stage 1` is the first stage, `--stage 2` is the second). The number of available stages depends on the curriculum.
 
 ### Monitoring
 
@@ -103,6 +105,22 @@ The training automatically progresses through stages:
 - Stage 6: Random maps, heavy traffic (0.5 density)
 
 Agent advances when success_rate and survival_rate thresholds are met.
+
+### Model Loading & Transfer Learning
+
+#### Weight Fallback Pattern
+When loading models, the system uses a fallback priority:
+1. `final_model.zip` - Model saved at the end of training
+2. `best_model.zip` - Best checkpoint by evaluation reward
+3. Error if neither exists
+
+#### Discrete → Continuous Transfer
+When training continuous actions, the MLP trunk weights are transferred from the discrete model:
+- Only the shared feature extraction layers are transferred
+- The output head (policy/value networks) is initialized fresh for continuous actions
+- Fallback order: final_discrete → best_discrete → error
+
+This transfer learning approach leverages features learned in the simpler discrete action space to speed up continuous training.
 
 ### Configuration
 

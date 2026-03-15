@@ -19,23 +19,29 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
     from src.curriculum_learning.config import CURRICULA, Stage
     from src.curriculum_learning.env import make_held_out_eval_env
+    from src.curriculum_learning.vecnorm_utils import load_or_create_vecnorm_for_eval
 else:
     from .config import CURRICULA, Stage
     from .env import make_held_out_eval_env
+    from .vecnorm_utils import load_or_create_vecnorm_for_eval
 
 import numpy as np
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
 
 PROFILES = {
     "discrete": {
-        "model_path": "models/best_discrete/best_model.zip",
-        "vecnorm_path": "models/best_discrete/vecnorm.pkl",
+        "model_path": "models/discrete/final_model.zip",
+        "fallback_model_path": "models/best_discrete/best_model.zip",
+        "vecnorm_path": "models/discrete/final_vecnorm.pkl",
+        "fallback_vecnorm_path": "models/best_discrete/vecnorm.pkl",
     },
     "continuous": {
-        "model_path": "models/best_continuous/best_model.zip",
-        "vecnorm_path": "models/best_continuous/vecnorm.pkl",
+        "model_path": "models/continuous/final_model.zip",
+        "fallback_model_path": "models/best_continuous/best_model.zip",
+        "vecnorm_path": "models/continuous/final_vecnorm.pkl",
+        "fallback_vecnorm_path": "models/best_continuous/vecnorm.pkl",
     },
 }
 
@@ -129,20 +135,57 @@ def main():
     stage_idx = None
     if "--stage" in args:
         idx = args.index("--stage")
-        if idx + 1 < len(args):
-            stage_idx = int(args[idx + 1])
+        if idx + 1 >= len(args):
+            print("Error: --stage requires a value (e.g., --stage 1)")
+            sys.exit(1)
+        try:
+            stage_idx = int(args[idx + 1]) - 1
+        except ValueError:
+            print(f"Error: --stage value must be an integer, got '{args[idx + 1]}'")
+            sys.exit(1)
     
     profile = PROFILES[phase]
     curriculum = CURRICULA[phase]
+    
+    if stage_idx is not None and (stage_idx < 0 or stage_idx >= len(curriculum)):
+        print(f"Error: stage must be between 1 and {len(curriculum)}")
+        sys.exit(1)
     
     if stage_idx is None and not all_stages:
         stage_idx = len(curriculum) - 1
     
     stages_to_eval = curriculum if all_stages else [curriculum[stage_idx]]
     
+    if all_stages:
+        print("\n" + "="*60)
+        print("WARNING: Evaluating FINAL model on all stages")
+        print("  This tests generalization, not curriculum progression.")
+        print("  Each stage was trained with different difficulty.")
+        print("="*60 + "\n")
+    
+    # Determine which model/vecnorm to use (prefer final, fallback to best)
+    model_path = profile["model_path"]
+    vecnorm_path = profile["vecnorm_path"]
+    
+    if os.path.exists(model_path) and os.path.exists(vecnorm_path):
+        pass  # Use primary paths
+    elif os.path.exists(profile["fallback_model_path"]) and os.path.exists(profile["fallback_vecnorm_path"]):
+        model_path = profile["fallback_model_path"]
+        vecnorm_path = profile["fallback_vecnorm_path"]
+        print("\n" + "="*60)
+        print("WARNING: Using BEST model for evaluation")
+        print("  (final model not found)")
+        print("="*60 + "\n")
+    else:
+        print(f"Error: No model found for {phase}")
+        print(f"  Tried: {profile['model_path']}")
+        print(f"  Tried: {profile['fallback_model_path']}")
+        print("Run train.py first.")
+        sys.exit(1)
+    
     print(f"\nPhase:   {phase}")
-    print(f"Model:   {profile['model_path']}")
-    print(f"VecNorm: {profile['vecnorm_path']}")
+    print(f"Model:   {model_path}")
+    print(f"VecNorm: {vecnorm_path}")
     
     for stage in stages_to_eval:
         print(f"\n{'='*60}")
@@ -151,17 +194,17 @@ def main():
         print(f"  Evaluation scenarios: {stage.num_scenarios_eval}")
         print(f"{'='*60}")
         
-        eval_vec = SubprocVecEnv([
+        eval_vec = DummyVecEnv([
             make_held_out_eval_env(seed=2000, stage=stage, use_render=use_render)
         ])
-        eval_env = VecNormalize.load(profile["vecnorm_path"], eval_vec)
+        eval_env = load_or_create_vecnorm_for_eval(vecnorm_path, eval_vec)
         eval_env.training = False
         eval_env.norm_reward = False
         
         try:
-            model = PPO.load(profile["model_path"], env=eval_env, device="cpu")
+            model = PPO.load(model_path, env=eval_env, device="cpu")
         except FileNotFoundError:
-            print(f"Error: model not found at {profile['model_path']}")
+            print(f"Error: model not found at {model_path}")
             print("Run train.py first.")
             eval_env.close()
             sys.exit(1)

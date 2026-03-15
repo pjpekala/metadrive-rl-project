@@ -11,6 +11,8 @@ import numpy as np
 from typing import Optional, List
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback, BaseCallback
 
+from .vecnorm_utils import sync_obs_rms, save_vecnorm
+
 
 class CurriculumCallback(BaseCallback):
     """
@@ -42,9 +44,9 @@ class CurriculumCallback(BaseCallback):
     
     def _on_step(self) -> bool:
         if self.n_calls % self.eval_freq == 0 or self.n_calls == 1:
-            self.eval_env.obs_rms = self.train_env.obs_rms
+            sync_obs_rms(self.train_env, self.eval_env)
             self.eval_env.training = False
-            self.train_env.save(self.vecnorm_ckpt_path)
+            save_vecnorm(self.train_env, self.vecnorm_ckpt_path)
         
         self.logger.record("curriculum/stage", self.current_stage_idx + 1)
         return True

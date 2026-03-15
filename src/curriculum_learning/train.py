@@ -16,13 +16,15 @@ if __name__ == "__main__":
     from src.curriculum_learning.config import CONTINUOUS_CURRICULUM, DISCRETE_CURRICULUM, CURRICULA, TrainingConfig
     from src.curriculum_learning.env import make_env, make_inline_eval_env
     from src.curriculum_learning.callbacks import CurriculumCallback, CurriculumEvalCallback, EarlyStoppingCallback, CheckpointCallback
+    from src.curriculum_learning.vecnorm_utils import load_or_create_vecnorm, create_vecnorm, sync_obs_rms, save_vecnorm
 else:
     from .config import CONTINUOUS_CURRICULUM, DISCRETE_CURRICULUM, CURRICULA, TrainingConfig
     from .env import make_env, make_inline_eval_env
     from .callbacks import CurriculumCallback, CurriculumEvalCallback, EarlyStoppingCallback, CheckpointCallback
+    from .vecnorm_utils import load_or_create_vecnorm, create_vecnorm, sync_obs_rms, save_vecnorm
 
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 
 def transfer_trunk(source_ckpt: str, source_vecnorm: str, target_env, stage_holder, train_seed: int, ppo_kwargs: dict):
@@ -30,7 +32,7 @@ def transfer_trunk(source_ckpt: str, source_vecnorm: str, target_env, stage_hold
     print(f"[transfer_trunk] Loading source checkpoint: {source_ckpt}")
     
     tmp_vec = SubprocVecEnv([make_env(train_seed, 0, stage_holder)])
-    tmp_env = VecNormalize.load(source_vecnorm, tmp_vec)
+    tmp_env = load_or_create_vecnorm(source_vecnorm, tmp_vec, norm_obs=True, norm_reward=True)
     source_model = PPO.load(source_ckpt, env=tmp_env, device=ppo_kwargs["device"])
     trunk_state = source_model.policy.mlp_extractor.state_dict()
     obs_rms = tmp_env.obs_rms
@@ -97,7 +99,7 @@ def run_training(
     
     if os.path.exists(checkpoint_path) and os.path.exists(vecnorm_ckpt_path):
         print(f"[{run_name}] Resuming from {checkpoint_path}")
-        train_env = VecNormalize.load(vecnorm_ckpt_path, train_vec)
+        train_env = load_or_create_vecnorm(vecnorm_ckpt_path, train_vec, norm_obs=True, norm_reward=True)
         train_env.training = True
         train_env.norm_reward = True
         model = PPO.load(
@@ -113,13 +115,7 @@ def run_training(
         )
     elif trunk_source_ckpt and os.path.exists(trunk_source_ckpt):
         print(f"[{run_name}] Transferring trunk from {trunk_source_ckpt}")
-        train_env = VecNormalize(
-            train_vec,
-            norm_obs=True,
-            norm_reward=True,
-            clip_obs=10.0,
-            clip_reward=10.0,
-        )
+        train_env = create_vecnorm(train_vec, norm_obs=True, norm_reward=True, training=True)
         model = transfer_trunk(
             source_ckpt=trunk_source_ckpt,
             source_vecnorm=trunk_source_vecnorm,
@@ -130,23 +126,11 @@ def run_training(
         )
     else:
         print(f"[{run_name}] No checkpoint found — training from scratch")
-        train_env = VecNormalize(
-            train_vec,
-            norm_obs=True,
-            norm_reward=True,
-            clip_obs=10.0,
-            clip_reward=10.0,
-        )
+        train_env = create_vecnorm(train_vec, norm_obs=True, norm_reward=True, training=True)
         model = PPO("MlpPolicy", train_env, **ppo_kwargs)
     
-    eval_env = VecNormalize(
-        eval_vec,
-        norm_obs=True,
-        norm_reward=False,
-        clip_obs=10.0,
-        training=False,
-    )
-    eval_env.obs_rms = train_env.obs_rms
+    eval_env = create_vecnorm(eval_vec, norm_obs=True, norm_reward=False, training=False)
+    sync_obs_rms(train_env, eval_env)
     
     curriculum_cb = CurriculumCallback(
         train_env=train_env,
@@ -190,7 +174,7 @@ def run_training(
     print(f"\n[{run_name}] Training finished.")
     
     model.save(final_model_path)
-    train_env.save(final_vecnorm_path)
+    save_vecnorm(train_env, final_vecnorm_path)
     print(f"[{run_name}] Model:   {final_model_path}.zip")
     print(f"[{run_name}] VecNorm: {final_vecnorm_path}")
     
@@ -210,13 +194,49 @@ def run_discrete():
 
 def run_continuous():
     config = TrainingConfig()
+    
+    final_ckpt = "models/discrete/final_model.zip"
+    final_vecnorm = "models/discrete/final_vecnorm.pkl"
+    best_ckpt = "models/best_discrete/best_model.zip"
+    best_vecnorm = "models/best_discrete/vecnorm.pkl"
+    
+    final_exists = os.path.exists(final_ckpt) and os.path.exists(final_vecnorm)
+    best_exists = os.path.exists(best_ckpt) and os.path.exists(best_vecnorm)
+    
+    if final_exists:
+        trunk_source_ckpt = final_ckpt
+        trunk_source_vecnorm = final_vecnorm
+        print("\n" + "="*60)
+        print("WARNING: Using FINAL discrete model for transfer")
+        print("  (model from end of full training)")
+        print("="*60 + "\n")
+    elif best_exists:
+        trunk_source_ckpt = best_ckpt
+        trunk_source_vecnorm = best_vecnorm
+        print("\n" + "="*60)
+        print("WARNING: Using BEST discrete model for transfer")
+        print("  (best eval reward, not final training)")
+        print("="*60 + "\n")
+    else:
+        missing = []
+        if os.path.exists(final_ckpt) and not os.path.exists(final_vecnorm):
+            missing.append(f"  - Missing: {final_vecnorm}")
+        if os.path.exists(best_ckpt) and not os.path.exists(best_vecnorm):
+            missing.append(f"  - Missing: {best_vecnorm}")
+        raise FileNotFoundError(
+            "No complete discrete checkpoint found!\n"
+            f"  Expected final: {final_ckpt} + {final_vecnorm}\n"
+            f"  Expected best:  {best_ckpt} + {best_vecnorm}\n"
+            + ("\n".join(missing) if missing else "Run discrete training first.")
+        )
+    
     run_training(
         curriculum=CONTINUOUS_CURRICULUM,
         run_name="continuous",
         config=config,
         total_timesteps=config.continuous_timesteps,
-        trunk_source_ckpt="models/best_discrete/best_model.zip",
-        trunk_source_vecnorm="models/best_discrete/vecnorm.pkl",
+        trunk_source_ckpt=trunk_source_ckpt,
+        trunk_source_vecnorm=trunk_source_vecnorm,
     )
 
 
