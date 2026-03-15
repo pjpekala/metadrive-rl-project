@@ -17,11 +17,11 @@ import os
 # Handle both direct execution and module import
 if __name__ == "__main__":
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-    from src.curriculum_learning.config import CURRICULA, Stage
+    from src.curriculum_learning.config import CURRICULA, Stage, Seeds
     from src.curriculum_learning.env import make_held_out_eval_env
     from src.curriculum_learning.vecnorm_utils import load_or_create_vecnorm_for_eval
 else:
-    from .config import CURRICULA, Stage
+    from .config import CURRICULA, Stage, Seeds
     from .env import make_held_out_eval_env
     from .vecnorm_utils import load_or_create_vecnorm_for_eval
 
@@ -195,7 +195,7 @@ def main():
         print(f"{'='*60}")
         
         eval_vec = DummyVecEnv([
-            make_held_out_eval_env(seed=2000, stage=stage, use_render=use_render)
+            make_held_out_eval_env(seed=Seeds.held_out_eval, stage=stage, use_render=use_render)
         ])
         eval_env = load_or_create_vecnorm_for_eval(vecnorm_path, eval_vec)
         eval_env.training = False

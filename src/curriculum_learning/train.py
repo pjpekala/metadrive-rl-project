@@ -139,6 +139,8 @@ def run_training(
         stage_holder=stage_holder,
         curriculum=curriculum,
         vecnorm_ckpt_path=vecnorm_ckpt_path,
+        curriculum_passes_required=config.curriculum_passes_required,
+        min_evals_per_stage=config.min_evals_per_stage,
         verbose=1,
     )
     
