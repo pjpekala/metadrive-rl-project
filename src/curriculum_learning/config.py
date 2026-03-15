@@ -66,8 +66,8 @@ class TrainingConfig:
     batch_size: int = 512
     discrete_timesteps: int = 10_000_000
     continuous_timesteps: int = 100_000_000
-    eval_freq_steps: int = 100_000
-    n_eval_episodes: int = 20
+    eval_freq_steps: int = 50_000
+    n_eval_episodes: int = 15
     device: str = "cpu"
     seeds: Seeds = field(default_factory=Seeds)
     
@@ -271,11 +271,11 @@ DISCRETE_CURRICULUM = [
         num_scenarios_train=5,
         num_scenarios_eval=5,
         traffic_density=0.0,
-        min_success_rate=1.0,
-        min_survival_rate=1.0,
-        reward_threshold=100,
+        min_success_rate=0.70,
+        min_survival_rate=0.90,
+        reward_threshold=50,
         discrete_action=True,
-        discrete_steering_dim=3,
+        discrete_steering_dim=5,
         discrete_throttle_dim=3,
     ),
     Stage(
@@ -284,9 +284,9 @@ DISCRETE_CURRICULUM = [
         num_scenarios_train=10,
         num_scenarios_eval=10,
         traffic_density=0.0,
-        min_success_rate=1.0,
-        min_survival_rate=1.0,
-        reward_threshold=110,
+        min_success_rate=0.75,
+        min_survival_rate=0.90,
+        reward_threshold=70,
         discrete_action=True,
         discrete_steering_dim=5,
         discrete_throttle_dim=3,
@@ -297,9 +297,9 @@ DISCRETE_CURRICULUM = [
         num_scenarios_train=20,
         num_scenarios_eval=20,
         traffic_density=0.05,
-        min_success_rate=0.75,
-        min_survival_rate=0.90,
-        reward_threshold=110,
+        min_success_rate=0.65,
+        min_survival_rate=0.85,
+        reward_threshold=80,
         discrete_action=True,
         discrete_steering_dim=5,
         discrete_throttle_dim=3,
