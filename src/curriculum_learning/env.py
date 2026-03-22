@@ -5,11 +5,11 @@ All environment configuration goes through build_metadrive_config() to ensure
 training and evaluation use the same settings.
 """
 
-from typing import Optional, List, Any
+from typing import Optional, List
 from metadrive.envs.safe_metadrive_env import SafeMetaDriveEnv
 from stable_baselines3.common.monitor import Monitor
 
-from .config import Stage, Seeds
+from .config import Stage
 
 
 def build_metadrive_config(
@@ -44,8 +44,8 @@ def build_metadrive_config(
         "speed_reward": 0.2,
         "use_lateral_reward": True,
         "success_reward": 30.0,
-        "out_of_road_penalty": 10.0,
-        "crash_vehicle_penalty": 10.0,
+        "out_of_road_penalty": 15.0,
+        "crash_vehicle_penalty": 15.0,
         
         "out_of_road_done": True,
         "crash_vehicle_done": True,
