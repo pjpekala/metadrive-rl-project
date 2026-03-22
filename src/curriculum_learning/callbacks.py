@@ -1,7 +1,7 @@
 """
 Training callbacks for curriculum learning.
 
-- CurriculumCallback: tracks stage progress and syncs VecNormalize
+- CurriculumCallback: tracks stage progress
 - CurriculumEvalCallback: runs evaluation and determines stage advancement
 - EarlyStoppingCallback: stops training when final stage thresholds are met
 """
@@ -9,17 +9,14 @@ Training callbacks for curriculum learning.
 import os
 import numpy as np
 from typing import Optional, List
-from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback, BaseCallback
-
-from .vecnorm_utils import sync_obs_rms, save_vecnorm
+from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 
 
 class CurriculumCallback(BaseCallback):
     """
-    Tracks curriculum stage progression and syncs VecNormalize stats.
+    Tracks curriculum stage progression.
     
-    Fires on the eval schedule to sync observation normalizer stats to the
-    eval environment and saves checkpoints.
+    Fires on the eval schedule to record curriculum metrics.
     """
     def __init__(
         self,
@@ -28,7 +25,6 @@ class CurriculumCallback(BaseCallback):
         eval_freq: int,
         stage_holder: List,
         curriculum: List,
-        vecnorm_ckpt_path: str,
         curriculum_passes_required: int = 2,
         min_evals_per_stage: int = 2,
         verbose: int = 1,
@@ -39,7 +35,6 @@ class CurriculumCallback(BaseCallback):
         self.eval_freq = eval_freq
         self.stage_holder = stage_holder
         self.curriculum = curriculum
-        self.vecnorm_ckpt_path = vecnorm_ckpt_path
         self.passes_required = curriculum_passes_required
         self.min_evals_per_stage = min_evals_per_stage
         self.current_stage_idx = 0
@@ -49,11 +44,6 @@ class CurriculumCallback(BaseCallback):
         self.total_evals_in_stage = 0
     
     def _on_step(self) -> bool:
-        if self.n_calls % self.eval_freq == 0 or self.n_calls == 1:
-            sync_obs_rms(self.train_env, self.eval_env)
-            self.eval_env.training = False
-            save_vecnorm(self.train_env, self.vecnorm_ckpt_path)
-        
         self.logger.record("curriculum/stage", self.current_stage_idx + 1)
         return True
     

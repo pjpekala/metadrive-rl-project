@@ -17,31 +17,25 @@ import os
 # Handle both direct execution and module import
 if __name__ == "__main__":
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-    from src.curriculum_learning.config import CURRICULA, Stage, Seeds
+    from src.curriculum_learning.config import CURRICULA, Seeds
     from src.curriculum_learning.env import make_held_out_eval_env
-    from src.curriculum_learning.vecnorm_utils import load_or_create_vecnorm_for_eval
 else:
-    from .config import CURRICULA, Stage, Seeds
+    from .config import CURRICULA, Seeds
     from .env import make_held_out_eval_env
-    from .vecnorm_utils import load_or_create_vecnorm_for_eval
 
 import numpy as np
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 PROFILES = {
     "discrete": {
         "model_path": "models/discrete/final_model.zip",
         "fallback_model_path": "models/best_discrete/best_model.zip",
-        "vecnorm_path": "models/discrete/final_vecnorm.pkl",
-        "fallback_vecnorm_path": "models/best_discrete/vecnorm.pkl",
     },
     "continuous": {
         "model_path": "models/continuous/final_model.zip",
         "fallback_model_path": "models/best_continuous/best_model.zip",
-        "vecnorm_path": "models/continuous/final_vecnorm.pkl",
-        "fallback_vecnorm_path": "models/best_continuous/vecnorm.pkl",
     },
 }
 
@@ -163,15 +157,13 @@ def main():
         print("  Each stage was trained with different difficulty.")
         print("="*60 + "\n")
     
-    # Determine which model/vecnorm to use (prefer final, fallback to best)
+    # Determine which model to use (prefer final, fallback to best)
     model_path = profile["model_path"]
-    vecnorm_path = profile["vecnorm_path"]
     
-    if os.path.exists(model_path) and os.path.exists(vecnorm_path):
-        pass  # Use primary paths
-    elif os.path.exists(profile["fallback_model_path"]) and os.path.exists(profile["fallback_vecnorm_path"]):
+    if os.path.exists(model_path):
+        pass  # Use primary path
+    elif os.path.exists(profile["fallback_model_path"]):
         model_path = profile["fallback_model_path"]
-        vecnorm_path = profile["fallback_vecnorm_path"]
         print("\n" + "="*60)
         print("WARNING: Using BEST model for evaluation")
         print("  (final model not found)")
@@ -183,9 +175,8 @@ def main():
         print("Run train.py first.")
         sys.exit(1)
     
-    print(f"\nPhase:   {phase}")
-    print(f"Model:   {model_path}")
-    print(f"VecNorm: {vecnorm_path}")
+    print(f"\nPhase: {phase}")
+    print(f"Model: {model_path}")
     
     for stage in stages_to_eval:
         print(f"\n{'='*60}")
@@ -194,12 +185,9 @@ def main():
         print(f"  Evaluation scenarios: {stage.num_scenarios_eval}")
         print(f"{'='*60}")
         
-        eval_vec = DummyVecEnv([
+        eval_env = DummyVecEnv([
             make_held_out_eval_env(seed=Seeds.held_out_eval, stage=stage, use_render=use_render)
         ])
-        eval_env = load_or_create_vecnorm_for_eval(vecnorm_path, eval_vec)
-        eval_env.training = False
-        eval_env.norm_reward = False
         
         try:
             model = PPO.load(model_path, env=eval_env, device="cpu")
