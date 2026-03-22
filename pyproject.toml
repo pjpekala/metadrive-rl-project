@@ -17,6 +17,7 @@ dependencies = [
     "lz4",
     "tensorboard",
     "numpy>=2.0",
+    "ruff>=0.15.4",
 ]
 
 [project.optional-dependencies]

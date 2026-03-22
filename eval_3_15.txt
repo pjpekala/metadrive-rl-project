@@ -1,0 +1,466 @@
+============================================================
+Evaluating on: Stage 1 — Straight road (S), no traffic
+  Training scenarios: 20
+  Evaluation scenarios: 20
+============================================================
+  Ep  1 |   TIMEOUT | Reward:   91.72 | Length: 1000
+  Ep  2 | ✓ SUCCESS | Reward:  114.81 | Length:   81
+  Ep  3 | ✓ SUCCESS | Reward:  122.71 | Length:   86
+  Ep  4 | ✗ CRASH   | Reward:   76.95 | Length:   90
+  Ep  5 | ✓ SUCCESS | Reward:  149.31 | Length:  102
+  Ep  6 | ✓ SUCCESS | Reward:  115.90 | Length:   82
+  Ep  7 |   TIMEOUT | Reward:   71.36 | Length: 1000
+  Ep  8 | ✓ SUCCESS | Reward:  135.82 | Length:   95
+  Ep  9 | ✓ SUCCESS | Reward:  127.16 | Length:   90
+  Ep 10 |   TIMEOUT | Reward:   81.39 | Length: 1000
+  Ep 11 | ✓ SUCCESS | Reward:  121.06 | Length:   86
+  Ep 12 | ✓ SUCCESS | Reward:  130.48 | Length:   91
+  Ep 13 | ✓ SUCCESS | Reward:  131.13 | Length:   91
+  Ep 14 | ✓ SUCCESS | Reward:  112.85 | Length:   86
+  Ep 15 | ✓ SUCCESS | Reward:  139.84 | Length:   94
+  Ep 16 |   TIMEOUT | Reward:   94.37 | Length: 1000
+  Ep 17 | ✓ SUCCESS | Reward:  135.76 | Length:   95
+  Ep 18 | ✓ SUCCESS | Reward:  135.51 | Length:   95
+  Ep 19 | ✓ SUCCESS | Reward:  130.44 | Length:   92
+  Ep 20 |   TIMEOUT | Reward:   92.00 | Length: 1000
+
+  --- Summary: Stage 1 — Straight road (S), no traffic ---
+  Mean reward:   115.53 ± 22.41
+  Mean length:   317.8
+  Success rate:  14/20  (70%)
+  Crash rate:    1/20  (5%)
+  Off-road rate: 0/20  (0%)
+  Survival rate: 19/20  (95%)
+(refactor U:4 ✗) metadrive-rl-project just eval continuous --stage all
+uv run -m src.curriculum_learning.evaluate continuous --stage all
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+Error: --stage value must be an integer, got 'all'
+error: Recipe `eval` failed on line 17 with exit code 1
+(refactor U:4 ✗) metadrive-rl-project just eval continuous --all-stages
+uv run -m src.curriculum_learning.evaluate continuous --all-stages
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+
+============================================================
+WARNING: Evaluating FINAL model on all stages
+  This tests generalization, not curriculum progression.
+  Each stage was trained with different difficulty.
+============================================================
+
+
+Phase:   continuous
+Model:   models/continuous/final_model.zip
+VecNorm: models/continuous/final_vecnorm.pkl
+
+============================================================
+Evaluating on: Stage 1 — Straight road (S), no traffic
+  Training scenarios: 20
+  Evaluation scenarios: 20
+============================================================
+  Ep  1 | ✓ SUCCESS | Reward:  148.83 | Length:  105
+  Ep  2 |   TIMEOUT | Reward:   92.24 | Length: 1000
+  Ep  3 | ✓ SUCCESS | Reward:  131.13 | Length:   91
+  Ep  4 |   TIMEOUT | Reward:   90.97 | Length: 1000
+  Ep  5 | ✓ SUCCESS | Reward:  148.67 | Length:  102
+  Ep  6 | ✓ SUCCESS | Reward:  139.47 | Length:   94
+  Ep  7 | ✓ SUCCESS | Reward:  145.75 | Length:   97
+  Ep  8 | ✓ SUCCESS | Reward:  114.81 | Length:   81
+  Ep  9 | ✓ SUCCESS | Reward:  112.85 | Length:   86
+  Ep 10 | ✓ SUCCESS | Reward:  125.73 | Length:   89
+  Ep 11 | ✓ SUCCESS | Reward:  135.54 | Length:   95
+  Ep 12 | ✓ SUCCESS | Reward:  115.92 | Length:   82
+  Ep 13 | ✓ SUCCESS | Reward:  149.18 | Length:  102
+  Ep 14 | ✓ SUCCESS | Reward:  112.85 | Length:   86
+  Ep 15 | ✓ SUCCESS | Reward:  127.23 | Length:   92
+  Ep 16 | ✓ SUCCESS | Reward:  112.85 | Length:   86
+  Ep 17 | ✓ SUCCESS | Reward:  144.11 | Length:   97
+  Ep 18 |   TIMEOUT | Reward:   91.97 | Length: 1000
+  Ep 19 |   TIMEOUT | Reward:   70.69 | Length: 1000
+  Ep 20 | ✓ SUCCESS | Reward:  112.85 | Length:   86
+
+  --- Summary: Stage 1 — Straight road (S), no traffic ---
+  Mean reward:   121.18 ± 21.94
+  Mean length:   273.6
+  Success rate:  16/20  (80%)
+  Crash rate:    0/20  (0%)
+  Off-road rate: 0/20  (0%)
+  Survival rate: 20/20  (100%)
+
+============================================================
+Evaluating on: Stage 2 — Gentle curves (SC), no traffic
+  Training scenarios: 30
+  Evaluation scenarios: 30
+============================================================
+  Ep  1 | ~ OFFROAD | Reward:   41.10 | Length:   62
+  Ep  2 | ~ OFFROAD | Reward:   42.33 | Length:   63
+  Ep  3 |   TIMEOUT | Reward:   70.07 | Length: 1000
+  Ep  4 |   TIMEOUT | Reward:   70.07 | Length: 1000
+  Ep  5 | ✗ CRASH   | Reward:   70.48 | Length:   81
+  Ep  6 | ~ OFFROAD | Reward:   55.31 | Length:   72
+  Ep  7 | ~ OFFROAD | Reward:   40.53 | Length:   62
+  Ep  8 | ✗ CRASH   | Reward:   59.78 | Length:   95
+  Ep  9 | ~ OFFROAD | Reward:   42.15 | Length:   63
+  Ep 10 | ~ OFFROAD | Reward:   40.84 | Length:   62
+  Ep 11 | ~ OFFROAD | Reward:   78.90 | Length:  153
+  Ep 12 | ✗ CRASH   | Reward:   71.37 | Length:   82
+  Ep 13 | ✗ CRASH   | Reward:  108.48 | Length:  111
+  Ep 14 |   TIMEOUT | Reward:   71.17 | Length: 1000
+  Ep 15 | ~ OFFROAD | Reward:   40.53 | Length:   62
+  Ep 16 | ~ OFFROAD | Reward:   42.15 | Length:   63
+  Ep 17 | ✗ CRASH   | Reward:   71.77 | Length:   91
+  Ep 18 | ~ OFFROAD | Reward:   55.31 | Length:   72
+  Ep 19 | ~ OFFROAD | Reward:   88.46 | Length:   91
+  Ep 20 | ✓ SUCCESS | Reward:  198.13 | Length:  154
+
+  --- Summary: Stage 2 — Gentle curves (SC), no traffic ---
+  Mean reward:   67.95 ± 35.01
+  Mean length:   221.9
+  Success rate:  1/20  (5%)
+  Crash rate:    5/20  (25%)
+  Off-road rate: 12/20  (60%)
+  Survival rate: 4/20  (20%)
+
+============================================================
+Evaluating on: Stage 3 — Complex curves (SCC), no traffic
+  Training scenarios: 50
+  Evaluation scenarios: 50
+============================================================
+  Ep  1 | ~ OFFROAD | Reward:   66.29 | Length:   78
+  Ep  2 | ~ OFFROAD | Reward:   69.40 | Length:   83
+  Ep  3 | ~ OFFROAD | Reward:  111.52 | Length:  113
+  Ep  4 | ~ OFFROAD | Reward:   94.33 | Length:  104
+  Ep  5 | ✗ CRASH   | Reward:   56.30 | Length:   80
+  Ep  6 | ✗ CRASH   | Reward:   58.97 | Length:   90
+  Ep  7 | ~ OFFROAD | Reward:   66.33 | Length:   78
+  Ep  8 | ~ OFFROAD | Reward:   42.62 | Length:   62
+  Ep  9 | ~ OFFROAD | Reward:   44.46 | Length:   64
+  Ep 10 | ✗ CRASH   | Reward:   85.71 | Length:   94
+  Ep 11 | ~ OFFROAD | Reward:   69.40 | Length:   83
+  Ep 12 | ~ OFFROAD | Reward:   45.45 | Length:   62
+  Ep 13 | ~ OFFROAD | Reward:   64.02 | Length:   76
+  Ep 14 | ~ OFFROAD | Reward:  199.40 | Length:  228
+  Ep 15 | ~ OFFROAD | Reward:   64.02 | Length:   76
+  Ep 16 | ✗ CRASH   | Reward:   62.06 | Length:   90
+  Ep 17 | ✗ CRASH   | Reward:   71.49 | Length:   84
+  Ep 18 | ~ OFFROAD | Reward:   54.65 | Length:   73
+  Ep 19 | ~ OFFROAD | Reward:   47.99 | Length:   66
+  Ep 20 | ✗ CRASH   | Reward:  120.82 | Length:  121
+
+  --- Summary: Stage 3 — Complex curves (SCC), no traffic ---
+  Mean reward:   74.76 ± 35.10
+  Mean length:   90.2
+  Success rate:  0/20  (0%)
+  Crash rate:    6/20  (30%)
+  Off-road rate: 14/20  (70%)
+  Survival rate: 0/20  (0%)
+
+============================================================
+Evaluating on: Stage 4 — Moderate curves (SCC), light traffic
+  Training scenarios: 40
+  Evaluation scenarios: 40
+============================================================
+  Ep  1 | ~ OFFROAD | Reward:   46.24 | Length:   65
+  Ep  2 | ~ OFFROAD | Reward:   43.48 | Length:   63
+  Ep  3 | ✗ CRASH   | Reward:   61.49 | Length:   78
+  Ep  4 |   TIMEOUT | Reward:   69.19 | Length: 1000
+  Ep  5 |   TIMEOUT | Reward:   64.37 | Length: 1000
+  Ep  6 | ✗ CRASH   | Reward:   50.59 | Length:   70
+  Ep  7 | ~ OFFROAD | Reward:  136.41 | Length:  268
+  Ep  8 | ~ OFFROAD | Reward:   83.31 | Length:   93
+  Ep  9 | ~ OFFROAD | Reward:   43.82 | Length:   63
+  Ep 10 | ~ OFFROAD | Reward:   54.10 | Length:   74
+  Ep 11 | ~ OFFROAD | Reward:   46.55 | Length:   68
+  Ep 12 | ~ OFFROAD | Reward:   51.21 | Length:   70
+  Ep 13 | ✗ CRASH   | Reward:   53.59 | Length:   84
+  Ep 14 | ~ OFFROAD | Reward:   43.84 | Length:   63
+  Ep 15 | ✗ CRASH   | Reward:   50.49 | Length:   80
+  Ep 16 | ✗ CRASH   | Reward:   88.08 | Length:   96
+  Ep 17 | ✗ CRASH   | Reward:   55.29 | Length:  102
+  Ep 18 | ✗ CRASH   | Reward:  102.56 | Length:  147
+  Ep 19 | ~ OFFROAD | Reward:   41.34 | Length:   61
+  Ep 20 | ✗ CRASH   | Reward:   82.35 | Length:  156
+
+  --- Summary: Stage 4 — Moderate curves (SCC), light traffic ---
+  Mean reward:   63.41 ± 23.69
+  Mean length:   185.1
+  Success rate:  0/20  (0%)
+  Crash rate:    8/20  (40%)
+  Off-road rate: 10/20  (50%)
+  Survival rate: 2/20  (10%)
+
+============================================================
+Evaluating on: Stage 5 — Curves (SCC), light traffic
+  Training scenarios: 75
+  Evaluation scenarios: 75
+============================================================
+  Ep  1 | ~ OFFROAD | Reward:   41.19 | Length:   61
+  Ep  2 | ~ OFFROAD | Reward:   88.55 | Length:   91
+  Ep  3 | ~ OFFROAD | Reward:   44.46 | Length:   64
+  Ep  4 | ~ OFFROAD | Reward:   76.91 | Length:  140
+  Ep  5 | ~ OFFROAD | Reward:  159.00 | Length:  232
+  Ep  6 | ~ OFFROAD | Reward:   99.12 | Length:  152
+  Ep  7 | ✗ CRASH   | Reward:   56.64 | Length:   79
+  Ep  8 | ✗ CRASH   | Reward:  113.93 | Length:  137
+  Ep  9 | ~ OFFROAD | Reward:   43.66 | Length:   63
+  Ep 10 | ~ OFFROAD | Reward:   43.66 | Length:   63
+  Ep 11 | ✗ CRASH   | Reward:   73.12 | Length:  139
+  Ep 12 | ~ OFFROAD | Reward:   69.41 | Length:   83
+  Ep 13 | ✗ CRASH   | Reward:   50.46 | Length:   70
+  Ep 14 | ~ OFFROAD | Reward:   44.47 | Length:   64
+  Ep 15 | ~ OFFROAD | Reward:   87.57 | Length:   89
+  Ep 16 | ✗ CRASH   | Reward:  124.82 | Length:  171
+  Ep 17 | ~ OFFROAD | Reward:   43.30 | Length:   63
+  Ep 18 | ~ OFFROAD | Reward:  109.19 | Length:  112
+  Ep 19 | ✗ CRASH   | Reward:   90.55 | Length:   96
+  Ep 20 | ✗ CRASH   | Reward:   59.43 | Length:   88
+
+  --- Summary: Stage 5 — Curves (SCC), light traffic ---
+  Mean reward:   75.97 ± 32.07
+  Mean length:   102.8
+  Success rate:  0/20  (0%)
+  Crash rate:    7/20  (35%)
+  Off-road rate: 14/20  (70%)
+  Survival rate: 0/20  (0%)
+
+============================================================
+Evaluating on: Stage 6 — Mixed (XCSO), light traffic
+  Training scenarios: 100
+  Evaluation scenarios: 100
+============================================================
+  Ep  1 | ~ OFFROAD | Reward:   37.24 | Length:   78
+  Ep  2 | ✗ CRASH   | Reward:   37.92 | Length:   77
+  Ep  3 | ✗ CRASH   | Reward:   38.41 | Length:   86
+  Ep  4 | ~ OFFROAD | Reward:   29.42 | Length:  107
+  Ep  5 | ~ OFFROAD | Reward:  108.60 | Length:  103
+  Ep  6 | ~ OFFROAD | Reward:   45.08 | Length:   96
+  Ep  7 | ✗ CRASH   | Reward:   38.81 | Length:   78
+  Ep  8 | ✗ CRASH   | Reward:   38.00 | Length:   86
+  Ep  9 | ~ OFFROAD | Reward:  119.96 | Length:  114
+  Ep 10 | ~ OFFROAD | Reward:  125.15 | Length:  118
+  Ep 11 | ~ OFFROAD | Reward:   47.36 | Length:   96
+  Ep 12 | ~ OFFROAD | Reward:   45.11 | Length:   96
+  Ep 13 | ~ OFFROAD | Reward:   29.37 | Length:  102
+  Ep 14 | ~ OFFROAD | Reward:   36.80 | Length:   74
+  Ep 15 | ~ OFFROAD | Reward:   15.83 | Length:   47
+  Ep 16 | ✗ CRASH   | Reward:   37.87 | Length:   73
+  Ep 17 | ✗ CRASH   | Reward:   38.44 | Length:   78
+  Ep 18 | ✗ CRASH   | Reward:   38.04 | Length:   76
+  Ep 19 | ~ OFFROAD | Reward:   45.08 | Length:   96
+  Ep 20 | ✗ CRASH   | Reward:   38.04 | Length:   76
+
+  --- Summary: Stage 6 — Mixed (XCSO), light traffic ---
+  Mean reward:   49.53 ± 29.60
+  Mean length:   87.8
+  Success rate:  0/20  (0%)
+  Crash rate:    8/20  (40%)
+  Off-road rate: 20/20  (100%)
+  Survival rate: 0/20  (0%)
+
+============================================================
+Evaluating on: Stage 7 — Mixed (XCSO), moderate traffic
+  Training scenarios: 150
+  Evaluation scenarios: 150
+============================================================
+  Ep  1 | ✗ CRASH   | Reward:  143.52 | Length:  171
+  Ep  2 | ~ OFFROAD | Reward:   43.18 | Length:   78
+  Ep  3 | ~ OFFROAD | Reward:   16.46 | Length:   49
+  Ep  4 | ~ OFFROAD | Reward:   42.91 | Length:   99
+  Ep  5 | ~ OFFROAD | Reward:   12.74 | Length:   45
+  Ep  6 |   TIMEOUT | Reward:  262.48 | Length: 1000
+  Ep  7 | ✗ CRASH   | Reward:  136.37 | Length:  181
+  Ep  8 | ~ OFFROAD | Reward:   44.24 | Length:   99
+  Ep  9 | ~ OFFROAD | Reward:   16.08 | Length:   46
+  Ep 10 | ~ OFFROAD | Reward:  110.55 | Length:  198
+  Ep 11 | ~ OFFROAD | Reward:  110.70 | Length:  109
+  Ep 12 | ~ OFFROAD | Reward:   18.78 | Length:   47
+  Ep 13 | ✗ CRASH   | Reward:   42.59 | Length:   78
+  Ep 14 | ~ OFFROAD | Reward:   46.88 | Length:   93
+  Ep 15 | ✗ CRASH   | Reward:   37.87 | Length:   73
+  Ep 16 | ✗ CRASH   | Reward:  107.44 | Length:  134
+  Ep 17 | ✗ CRASH   | Reward:   39.04 | Length:   75
+  Ep 18 | ✗ CRASH   | Reward:   34.80 | Length:   74
+  Ep 19 | ~ OFFROAD | Reward:   13.24 | Length:   44
+  Ep 20 | ~ OFFROAD | Reward:   13.94 | Length:   42
+
+  --- Summary: Stage 7 — Mixed (XCSO), moderate traffic ---
+  Mean reward:   64.69 ± 61.51
+  Mean length:   136.8
+  Success rate:  0/20  (0%)
+  Crash rate:    7/20  (35%)
+  Off-road rate: 15/20  (75%)
+  Survival rate: 1/20  (5%)
+
+============================================================
+Evaluating on: Stage 8 — Random maps (5 blocks), moderate traffic
+  Training scenarios: 200
+  Evaluation scenarios: 200
+============================================================
+  Ep  1 | ~ OFFROAD | Reward:   -2.45 | Length:   24
+  Ep  2 | ✗ CRASH   | Reward:  154.95 | Length:  192
+  Ep  3 | ~ OFFROAD | Reward:   45.86 | Length:  104
+  Ep  4 | ~ OFFROAD | Reward:   45.56 | Length:   72
+  Ep  5 | ✗ CRASH   | Reward:  214.07 | Length:  450
+  Ep  6 | ~ OFFROAD | Reward:   -2.55 | Length:   23
+  Ep  7 | ✗ CRASH   | Reward:   60.80 | Length:   73
+  Ep  8 | ~ OFFROAD | Reward:  135.41 | Length:  118
+  Ep  9 | ~ OFFROAD | Reward:   46.29 | Length:  101
+  Ep 10 | ✗ CRASH   | Reward:  235.48 | Length:  493
+  Ep 11 |   TIMEOUT | Reward:   57.16 | Length: 1000
+  Ep 12 |   TIMEOUT | Reward:   84.51 | Length: 1000
+  Ep 13 | ✗ CRASH   | Reward:   57.30 | Length:   75
+  Ep 14 | ✗ CRASH   | Reward:   24.62 | Length:   75
+  Ep 15 | ✗ CRASH   | Reward:   36.41 | Length:   88
+  Ep 16 |   TIMEOUT | Reward:   96.90 | Length: 1000
+  Ep 17 | ~ OFFROAD | Reward:   32.93 | Length:   63
+  Ep 18 | ✗ CRASH   | Reward:   -1.96 | Length:   25
+  Ep 19 | ✗ CRASH   | Reward:   25.30 | Length:   78
+  Ep 20 |   TIMEOUT | Reward:  253.93 | Length: 1000
+
+  --- Summary: Stage 8 — Random maps (5 blocks), moderate traffic ---
+  Mean reward:   80.03 ± 76.42
+  Mean length:   302.7
+  Success rate:  0/20  (0%)
+  Crash rate:    9/20  (45%)
+  Off-road rate: 10/20  (50%)
+  Survival rate: 4/20  (20%)
+
+============================================================
+Evaluating on: Stage 9 — Random maps (6 blocks), moderate traffic
+  Training scenarios: 300
+  Evaluation scenarios: 300
+============================================================
+  Ep  1 | ✗ CRASH   | Reward:   74.75 | Length:   83
+  Ep  2 | ✗ CRASH   | Reward:   63.05 | Length:  141
+  Ep  3 |   TIMEOUT | Reward:   80.55 | Length: 1000
+  Ep  4 | ✗ CRASH   | Reward:   36.01 | Length:   73
+  Ep  5 | ~ OFFROAD | Reward:   60.00 | Length:   96
+  Ep  6 |   TIMEOUT | Reward:  304.55 | Length: 1000
+  Ep  7 |   TIMEOUT | Reward:  115.69 | Length: 1000
+  Ep  8 | ✗ CRASH   | Reward:  209.24 | Length:  312
+  Ep  9 | ✗ CRASH   | Reward:   45.02 | Length:   82
+  Ep 10 | ✗ CRASH   | Reward:   91.06 | Length:  155
+  Ep 11 | ~ OFFROAD | Reward:   43.46 | Length:  112
+  Ep 12 | ✗ CRASH   | Reward:   58.47 | Length:  268
+  Ep 13 | ~ OFFROAD | Reward:   10.51 | Length:   40
+  Ep 14 | ✗ CRASH   | Reward:   60.76 | Length:  106
+  Ep 15 | ~ OFFROAD | Reward:   -2.62 | Length:   24
+  Ep 16 | ~ OFFROAD | Reward:   45.81 | Length:   68
+  Ep 17 | ~ OFFROAD | Reward:   33.80 | Length:   64
+  Ep 18 | ~ OFFROAD | Reward:   45.52 | Length:   93
+  Ep 19 | ~ OFFROAD | Reward:   81.79 | Length:  123
+  Ep 20 | ✗ CRASH   | Reward:   89.74 | Length:  218
+
+  --- Summary: Stage 9 — Random maps (6 blocks), moderate traffic ---
+  Mean reward:   77.36 ± 67.33
+  Mean length:   252.9
+  Success rate:  0/20  (0%)
+  Crash rate:    9/20  (45%)
+  Off-road rate: 8/20  (40%)
+  Survival rate: 3/20  (15%)
+
+============================================================
+Evaluating on: Stage 10 — Random maps (6 blocks), heavy traffic
+  Training scenarios: 400
+  Evaluation scenarios: 400
+============================================================
+  Ep  1 | ✗ CRASH   | Reward:   74.34 | Length:  181
+  Ep  2 | ✗ CRASH   | Reward:  -10.00 | Length:    1
+  Ep  3 |   TIMEOUT | Reward:    1.38 | Length: 1000
+  Ep  4 | ~ OFFROAD | Reward:   -2.32 | Length:   24
+  Ep  5 | ~ OFFROAD | Reward:   42.87 | Length:   65
+  Ep  6 | ~ OFFROAD | Reward:   42.87 | Length:   65
+  Ep  7 | ~ OFFROAD | Reward:   20.10 | Length:   52
+  Ep  8 | ~ OFFROAD | Reward:   18.09 | Length:   51
+  Ep  9 | ✗ CRASH   | Reward:   26.03 | Length:   75
+  Ep 10 | ~ OFFROAD | Reward:   19.13 | Length:   51
+  Ep 11 |   TIMEOUT | Reward:  127.08 | Length: 1000
+  Ep 12 |   TIMEOUT | Reward:  101.09 | Length: 1000
+  Ep 13 | ✗ CRASH   | Reward:   35.74 | Length:   77
+  Ep 14 | ✗ CRASH   | Reward:  101.47 | Length:  331
+  Ep 15 | ✗ CRASH   | Reward:   69.32 | Length:  179
+  Ep 16 | ✗ CRASH   | Reward:   56.74 | Length:   97
+  Ep 17 |   TIMEOUT | Reward:  136.08 | Length: 1000
+  Ep 18 | ~ OFFROAD | Reward:   26.08 | Length:   56
+  Ep 19 | ~ OFFROAD | Reward:   -2.78 | Length:   23
+  Ep 20 | ~ OFFROAD | Reward:   -1.71 | Length:   25
+
+  --- Summary: Stage 10 — Random maps (6 blocks), heavy traffic ---
+  Mean reward:   44.08 ± 43.24
+  Mean length:   267.6
+  Success rate:  0/20  (0%)
+  Crash rate:    7/20  (35%)
+  Off-road rate: 10/20  (50%)
+  Survival rate: 4/20  (20%)
+
+============================================================
+Evaluating on: Stage 11 — Random maps (7 blocks), heavy traffic
+  Training scenarios: 500
+  Evaluation scenarios: 500
+============================================================
+  Ep  1 | ~ OFFROAD | Reward:   43.17 | Length:   66
+  Ep  2 | ~ OFFROAD | Reward:   41.98 | Length:   81
+  Ep  3 | ~ OFFROAD | Reward:   16.48 | Length:  136
+  Ep  4 |   TIMEOUT | Reward:  143.69 | Length: 1000
+  Ep  5 | ✗ CRASH   | Reward:   19.65 | Length:   61
+  Ep  6 | ✗ CRASH   | Reward:   15.99 | Length:   76
+  Ep  7 | ~ OFFROAD | Reward:   40.72 | Length:  118
+  Ep  8 | ✗ CRASH   | Reward:  111.53 | Length:  121
+  Ep  9 |   TIMEOUT | Reward:  117.14 | Length: 1000
+  Ep 10 | ~ OFFROAD | Reward:   95.47 | Length:  126
+  Ep 11 | ✗ CRASH   | Reward:   61.35 | Length:   83
+  Ep 12 | ~ OFFROAD | Reward:   42.04 | Length:  115
+  Ep 13 | ~ OFFROAD | Reward:   42.07 | Length:   76
+  Ep 14 | ✗ CRASH   | Reward:   52.59 | Length:  110
+  Ep 15 | ✗ CRASH   | Reward:   43.57 | Length:   65
+  Ep 16 | ~ OFFROAD | Reward:   51.28 | Length:  162
+  Ep 17 | ~ OFFROAD | Reward:   44.25 | Length:   65
+  Ep 18 | ✗ CRASH   | Reward:   34.66 | Length:   65
+  Ep 19 | ✗ CRASH   | Reward:   70.76 | Length:  317
+  Ep 20 | ~ OFFROAD | Reward:   42.92 | Length:   79
+
+  --- Summary: Stage 11 — Random maps (7 blocks), heavy traffic ---
+  Mean reward:   56.56 ± 33.71
+  Mean length:   196.1
+  Success rate:  0/20  (0%)
+  Crash rate:    8/20  (40%)
+  Off-road rate: 12/20  (60%)
+  Survival rate: 2/20  (10%)
+
+============================================================
+Evaluating on: Stage 12 — Random maps (9 blocks), heavy traffic (final)
+  Training scenarios: 750
+  Evaluation scenarios: 750
+============================================================
+  Ep  1 |   TIMEOUT | Reward:    0.00 | Length: 1000
+  Ep  2 | ✗ CRASH   | Reward:   57.27 | Length:   72
+  Ep  3 | ✗ CRASH   | Reward:   70.63 | Length:  843
+  Ep  4 |   TIMEOUT | Reward:   66.64 | Length: 1000
+  Ep  5 | ✗ CRASH   | Reward:   47.42 | Length:   68
+  Ep  6 | ✗ CRASH   | Reward:   20.23 | Length:   62
+  Ep  7 | ~ OFFROAD | Reward:   46.39 | Length:   68
+  Ep  8 | ~ OFFROAD | Reward:   14.25 | Length:  417
+  Ep  9 | ✗ CRASH   | Reward:   22.82 | Length:   61
+  Ep 10 | ✗ CRASH   | Reward:   56.69 | Length:   72
+  Ep 11 | ✗ CRASH   | Reward:   50.69 | Length:   73
+  Ep 12 | ✗ CRASH   | Reward:  116.72 | Length:  985
+  Ep 13 | ✗ CRASH   | Reward:   36.05 | Length:   93
+  Ep 14 |   TIMEOUT | Reward:   50.26 | Length: 1000
+  Ep 15 | ✗ CRASH   | Reward:   74.81 | Length:  353
+  Ep 16 | ✗ CRASH   | Reward:   20.88 | Length:  530
+  Ep 17 | ✗ CRASH   | Reward:   68.23 | Length:  740
+  Ep 18 | ✗ CRASH   | Reward:   89.65 | Length:  798
+  Ep 19 | ✗ CRASH   | Reward:   41.61 | Length:   72
+  Ep 20 | ~ OFFROAD | Reward:   17.96 | Length:   50
+
+  --- Summary: Stage 12 — Random maps (9 blocks), heavy traffic (final) ---
+  Mean reward:   48.46 ± 27.65
+  Mean length:   417.9
+  Success rate:  0/20  (0%)
+  Crash rate:    14/20  (70%)
+  Off-road rate: 3/20  (15%)
+  Survival rate: 3/20  (15%)

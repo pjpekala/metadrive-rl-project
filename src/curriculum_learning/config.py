@@ -6,39 +6,75 @@ All other modules import from here.
 """
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Union, Optional
+
+
+class ObservationType(Enum):
+    """Observation type for sensor experiments."""
+
+    LIDAR = "lidar"
+    DENSE_LIDAR = "dense_lidar"
+    BEV = "bev"
+    RGB = "rgb"
+
+
+@dataclass
+class BEVSensorConfig:
+    """Configuration for BEV (bird's-eye view) sensor."""
+
+    frame_skip: int = 5
+    frame_stack: int = 3
+    post_stack: int = 5
+    norm_pixel: bool = True
+    resolution_size: int = 84
+    distance: int = 30
+
+
+@dataclass
+class RGBSensorConfig:
+    """Configuration for RGB camera sensor."""
+
+    camera_width: int = 64
+    camera_height: int = 64
+    stack_size: int = 1
 
 
 @dataclass
 class Stage:
     """
     Single curriculum stage configuration.
-    
+
     Training and evaluation both use this config - ensuring alignment.
     """
+
     name: str
     map: Union[int, str]
     num_scenarios_train: int
     num_scenarios_eval: int
     traffic_density: float = 0.0
-    
+
     min_success_rate: float = 0.8
     min_survival_rate: float = 0.95
     reward_threshold: float = 200.0
-    
+
     discrete_action: Optional[bool] = None
     discrete_steering_dim: int = 3
     discrete_throttle_dim: int = 3
     horizon: int = 1000
-    
+
     random_lane_width: bool = False
     random_lane_num: bool = False
     random_agent_model: bool = False
     random_traffic: bool = False
-    
+
+    use_dense_lidar: bool = False
+    lidar_num_lasers: int = 360
+    lidar_distance: float = 50.0
+
     min_passes_required: Optional[int] = None
     min_evals_required: Optional[int] = None
-    
+
     @property
     def is_discrete(self) -> bool:
         return self.discrete_action if self.discrete_action is not None else False
@@ -47,12 +83,13 @@ class Stage:
 @dataclass
 class Seeds:
     """Seed configuration for reproducibility
-    
+
     Seed ranges:
     - Training: 0-5999 (8 workers × 750 scenarios)
     - Inline eval: 6000-6749 (truly held-out from training)
     - Held-out eval: 7000-7749 (truly held-out from both)
     """
+
     train: int = 0
     inline_eval: int = 6000
     held_out_eval: int = 7000
@@ -61,6 +98,7 @@ class Seeds:
 @dataclass
 class TrainingConfig:
     """Main training hyperparameters"""
+
     n_envs: int = 8
     n_steps: int = 2048
     batch_size: int = 512
@@ -70,10 +108,11 @@ class TrainingConfig:
     n_eval_episodes: int = 15
     device: str = "cpu"
     seeds: Seeds = field(default_factory=Seeds)
-    
+
     policy: str = "MlpPolicy"
     net_arch: dict = field(default_factory=lambda: dict(pi=[512, 256], vf=[512, 256]))
-    
+    cnn_features_dim: int = 256
+
     learning_rate: float = 1e-4
     gamma: float = 0.99
     gae_lambda: float = 0.95
@@ -83,9 +122,12 @@ class TrainingConfig:
     max_grad_norm: float = 0.5
     target_kl: float = 0.02
     n_epochs: int = 10
-    
+
     curriculum_passes_required: int = 2
     min_evals_per_stage: int = 2
+
+    bev_config: BEVSensorConfig = field(default_factory=BEVSensorConfig)
+    rgb_config: RGBSensorConfig = field(default_factory=RGBSensorConfig)
 
 
 CONTINUOUS_CURRICULUM = [
@@ -323,4 +365,7 @@ DISCRETE_CURRICULUM = [
 CURRICULA = {
     "discrete": DISCRETE_CURRICULUM,
     "continuous": CONTINUOUS_CURRICULUM,
+    "bev": CONTINUOUS_CURRICULUM,
+    "rgb": CONTINUOUS_CURRICULUM,
+    "dense_lidar": CONTINUOUS_CURRICULUM,
 }

@@ -8,13 +8,37 @@ default:
 train phase:
     uv run -m src.curriculum_learning.train {{phase}}
 
+# Train BEV sensor experiment
+train-bev:
+    uv run -m src.curriculum_learning.train_bev
+
+# Train RGB camera sensor experiment
+train-rgb:
+    uv run -m src.curriculum_learning.train_rgb
+
+# Train dense LiDAR sensor experiment
+train-dense-lidar:
+    uv run -m src.curriculum_learning.train_dense_lidar
+
 # Evaluate trained model
 # Usage: just eval continuous
 #        just eval continuous --stage 2
 #        just eval continuous --all-stages
 #        just eval continuous --render
 eval phase="continuous" *args="":
-    uv run -m src.curriculum_learning.evaluate {{phase}} {{args}}
+    PYTHONUNBUFFERED=1 uv run -m src.curriculum_learning.evaluate {{phase}} {{args}}
+
+# Evaluate BEV sensor experiment
+eval-bev *args="":
+    just eval bev {{args}}
+
+# Evaluate RGB camera sensor experiment
+eval-rgb *args="":
+    just eval rgb {{args}}
+
+# Evaluate dense LiDAR sensor experiment
+eval-dense-lidar *args="":
+    just eval dense_lidar {{args}}
 
 # Open TensorBoard
 tensorboard:
