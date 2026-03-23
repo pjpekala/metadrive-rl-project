@@ -15,9 +15,10 @@ from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 class CurriculumCallback(BaseCallback):
     """
     Tracks curriculum stage progression.
-    
+
     Fires on the eval schedule to record curriculum metrics.
     """
+
     def __init__(
         self,
         train_env,
@@ -42,12 +43,14 @@ class CurriculumCallback(BaseCallback):
         self.eval_count = 0
         self.consecutive_passes = 0
         self.total_evals_in_stage = 0
-    
+
     def _on_step(self) -> bool:
         self.logger.record("curriculum/stage", self.current_stage_idx + 1)
         return True
-    
-    def on_eval_end(self, mean_reward: float, survival_rate: float, success_rate: float) -> bool:
+
+    def on_eval_end(
+        self, mean_reward: float, survival_rate: float, success_rate: float
+    ) -> bool:
         """
         Called after each evaluation round.
         Returns True if curriculum should continue, False if training should stop.
@@ -55,101 +58,110 @@ class CurriculumCallback(BaseCallback):
         self.eval_count += 1
         self.total_evals_in_stage += 1
         stage = self.curriculum[self.current_stage_idx]
-        
+
         passes_required = stage.min_passes_required or self.passes_required
         min_evals = stage.min_evals_required or self.min_evals_per_stage
-        
+
         reward_ok = mean_reward >= stage.reward_threshold
         survival_ok = survival_rate >= stage.min_survival_rate
         success_ok = success_rate >= stage.min_success_rate
         thresholds_met = reward_ok and survival_ok and success_ok
-        
+
         if thresholds_met:
             self.consecutive_passes += 1
         else:
             self.consecutive_passes = 0
-        
+
         can_advance = (
-            self.consecutive_passes >= passes_required and
-            self.total_evals_in_stage >= min_evals
+            self.consecutive_passes >= passes_required
+            and self.total_evals_in_stage >= min_evals
         )
-        
+
         steps_in_stage = self.num_timesteps - self.stage_start_timestep
-        
+
         print(f"\n[Curriculum] {stage.name} (eval #{self.eval_count})")
         print(f"  Steps in stage: {steps_in_stage:,}")
-        print(f"  Reward:   {mean_reward:.1f} (need >= {stage.reward_threshold}) — {'✓' if reward_ok else '✗'}")
-        print(f"  Survival: {survival_rate*100:.0f}% (need >= {stage.min_survival_rate*100:.0f}%) — {'✓' if survival_ok else '✗'}")
-        print(f"  Success:  {success_rate*100:.0f}% (need >= {stage.min_success_rate*100:.0f}%) — {'✓' if success_ok else '✗'}")
+        print(
+            f"  Reward:   {mean_reward:.1f} (need >= {stage.reward_threshold}) — {'✓' if reward_ok else '✗'}"
+        )
+        print(
+            f"  Survival: {survival_rate * 100:.0f}% (need >= {stage.min_survival_rate * 100:.0f}%) — {'✓' if survival_ok else '✗'}"
+        )
+        print(
+            f"  Success:  {success_rate * 100:.0f}% (need >= {stage.min_success_rate * 100:.0f}%) — {'✓' if success_ok else '✗'}"
+        )
         print(f"  Consecutive passes: {self.consecutive_passes}/{passes_required}")
         print(f"  Evals in stage: {self.total_evals_in_stage}/{min_evals}")
-        
+
         self.logger.record("curriculum/stage", self.current_stage_idx + 1)
         self.logger.record("curriculum/survival_threshold", stage.min_survival_rate)
         self.logger.record("curriculum/success_threshold", stage.min_success_rate)
         self.logger.record("curriculum/consecutive_passes", self.consecutive_passes)
         self.logger.record("curriculum/passes_required", passes_required)
         self.logger.dump(self.num_timesteps)
-        
+
         if can_advance and self.current_stage_idx < len(self.curriculum) - 1:
             self.current_stage_idx += 1
             new_stage = self.curriculum[self.current_stage_idx]
             self.stage_start_timestep = self.num_timesteps
             self.consecutive_passes = 0
             self.total_evals_in_stage = 0
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"[Curriculum] ✓ ADVANCING to: {new_stage.name}")
-            print(f"{'='*60}\n")
+            print(f"{'=' * 60}\n")
             self.stage_holder[0] = new_stage
         elif can_advance and self.current_stage_idx >= len(self.curriculum) - 1:
             print(f"\n[Curriculum] ✓ Final stage '{stage.name}' thresholds met!")
-        
+
         return can_advance
 
 
 class CurriculumEvalCallback(EvalCallback):
     """
     Extended EvalCallback with detailed per-episode logging.
-    
+
     Runs evaluation episodes, collects metrics, and notifies the
     CurriculumCallback after each evaluation round.
     """
+
     def __init__(
         self,
         curriculum_cb: CurriculumCallback,
         early_stopping_cb: Optional["EarlyStoppingCallback"] = None,
+        model_save_path: str = None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.curriculum_cb = curriculum_cb
         self.early_stopping_cb = early_stopping_cb
-        self._prev_mean_reward = None
-    
+        self.model_save_path = model_save_path
+        self._prev_stage_idx = 0
+
     def evaluate_policy_verbose(self) -> tuple:
         episode_rewards, episode_lengths = [], []
         success_count = collision_count = offroad_count = failed_count = 0
-        
+
         obs = self.eval_env.reset()
         ep_reward, ep_length, ep_num = 0.0, 0, 0
-        
+
         print(f"\n--- Eval (step {self.num_timesteps}) ---")
-        
+
         while ep_num < self.n_eval_episodes:
             action, _ = self.model.predict(obs, deterministic=self.deterministic)
             obs, reward, done, info = self.eval_env.step(action)
             ep_reward += reward[0]
             ep_length += 1
-            
+
             if done[0]:
                 ep_num += 1
                 episode_rewards.append(ep_reward)
                 episode_lengths.append(ep_length)
-                
+
                 arrive_dest = info[0].get("arrive_dest", False)
                 crash = info[0].get("crash", False)
                 out_of_road = info[0].get("out_of_road", False)
-                
+
                 if arrive_dest:
                     success_count += 1
                 if crash:
@@ -158,7 +170,7 @@ class CurriculumEvalCallback(EvalCallback):
                     offroad_count += 1
                 if crash or out_of_road:
                     failed_count += 1
-                
+
                 if arrive_dest:
                     status = "✓ SUCCESS"
                 elif crash:
@@ -167,7 +179,7 @@ class CurriculumEvalCallback(EvalCallback):
                     status = "~ OFFROAD"
                 else:
                     status = "  TIMEOUT"
-                
+
                 print(
                     f"  Ep {ep_num:2d} | {status} | "
                     f"Reward: {ep_reward:7.2f} | "
@@ -175,7 +187,7 @@ class CurriculumEvalCallback(EvalCallback):
                 )
                 ep_reward, ep_length = 0.0, 0
                 obs = self.eval_env.reset()
-        
+
         n = self.n_eval_episodes
         mean_r = np.mean(episode_rewards)
         std_r = np.std(episode_rewards)
@@ -184,15 +196,15 @@ class CurriculumEvalCallback(EvalCallback):
         success_rate = success_count / n
         collision_rate = collision_count / n
         offroad_rate = offroad_count / n
-        
+
         print(
             f"  Summary | Mean reward: {mean_r:.2f} ± {std_r:.2f} | "
             f"Success: {success_count}/{n} | "
             f"Crash: {collision_count}/{n} | "
             f"Off-road: {offroad_count}/{n} | "
-            f"Survival: {int(survival_rate*n)}/{n}\n"
+            f"Survival: {int(survival_rate * n)}/{n}\n"
         )
-        
+
         if self.logger is not None:
             self.logger.record("eval/mean_reward", mean_r)
             self.logger.record("eval/std_reward", std_r)
@@ -202,28 +214,39 @@ class CurriculumEvalCallback(EvalCallback):
             self.logger.record("eval/offroad_rate", offroad_rate)
             self.logger.record("eval/survival_rate", survival_rate)
             self.logger.dump(self.num_timesteps)
-        
+
         return mean_r, survival_rate, success_rate
-    
+
     def _on_step(self) -> bool:
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             mean_reward, survival_rate, success_rate = self.evaluate_policy_verbose()
             self.last_mean_reward = mean_reward
-            
-            if mean_reward > self.best_mean_reward:
-                self.best_mean_reward = mean_reward
-                print(f"  New best mean reward: {mean_reward:.2f} — saving model")
-                if self.best_model_save_path is not None:
-                    self.model.save(
-                        os.path.join(self.best_model_save_path, "best_model")
-                    )
-            
-            all_met = self.curriculum_cb.on_eval_end(mean_reward, survival_rate, success_rate)
-            
+
+            prev_stage = self.curriculum_cb.current_stage_idx
+
+            if self.best_model_save_path is not None:
+                self.model.save(os.path.join(self.best_model_save_path, "best_model"))
+
+            all_met = self.curriculum_cb.on_eval_end(
+                mean_reward, survival_rate, success_rate
+            )
+
+            new_stage = self.curriculum_cb.current_stage_idx
+
+            if new_stage > prev_stage and self.model_save_path is not None:
+                snapshot_name = f"best_{os.path.basename(self.model_save_path)}_stage{prev_stage + 1}.zip"
+                snapshot_path = os.path.join(self.model_save_path, snapshot_name)
+                self.model.save(snapshot_path)
+                print(
+                    f"[Curriculum] Saved stage {prev_stage + 1} snapshot: {snapshot_path}"
+                )
+
+            self._prev_stage_idx = new_stage
+
             if self.early_stopping_cb is not None:
                 if not self.early_stopping_cb.on_eval_end(all_met):
                     return False
-        
+
         return True
 
 
@@ -232,6 +255,7 @@ class EarlyStoppingCallback(BaseCallback):
     Stops training once the final curriculum stage thresholds have been
     met for `patience` consecutive evaluations.
     """
+
     def __init__(
         self,
         curriculum_cb: CurriculumCallback,
@@ -242,10 +266,10 @@ class EarlyStoppingCallback(BaseCallback):
         self.curriculum_cb = curriculum_cb
         self.patience = patience
         self._consecutive_passes = 0
-    
+
     def _on_step(self) -> bool:
         return True
-    
+
     def on_eval_end(self, all_thresholds_met: bool) -> bool:
         """
         Called by CurriculumEvalCallback after each evaluation.
@@ -255,7 +279,7 @@ class EarlyStoppingCallback(BaseCallback):
             self.curriculum_cb.current_stage_idx
             == len(self.curriculum_cb.curriculum) - 1
         )
-        
+
         if on_final_stage and all_thresholds_met:
             self._consecutive_passes += 1
             if self.verbose:
@@ -271,5 +295,5 @@ class EarlyStoppingCallback(BaseCallback):
                 return False
         else:
             self._consecutive_passes = 0
-        
+
         return True
