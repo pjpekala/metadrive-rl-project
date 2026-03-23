@@ -62,10 +62,9 @@ class CurriculumCallback(BaseCallback):
         passes_required = stage.min_passes_required or self.passes_required
         min_evals = stage.min_evals_required or self.min_evals_per_stage
 
-        reward_ok = mean_reward >= stage.reward_threshold
         survival_ok = survival_rate >= stage.min_survival_rate
         success_ok = success_rate >= stage.min_success_rate
-        thresholds_met = reward_ok and survival_ok and success_ok
+        thresholds_met = survival_ok and success_ok
 
         if thresholds_met:
             self.consecutive_passes += 1
@@ -81,9 +80,6 @@ class CurriculumCallback(BaseCallback):
 
         print(f"\n[Curriculum] {stage.name} (eval #{self.eval_count})")
         print(f"  Steps in stage: {steps_in_stage:,}")
-        print(
-            f"  Reward:   {mean_reward:.1f} (need >= {stage.reward_threshold}) — {'✓' if reward_ok else '✗'}"
-        )
         print(
             f"  Survival: {survival_rate * 100:.0f}% (need >= {stage.min_survival_rate * 100:.0f}%) — {'✓' if survival_ok else '✗'}"
         )

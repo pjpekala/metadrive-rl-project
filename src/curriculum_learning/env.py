@@ -41,10 +41,10 @@ def build_metadrive_config(
         "traffic_density": stage.traffic_density,
         
         "driving_reward": 1.0,
-        "speed_reward": 0.2,
+        "speed_reward": 0.05,
         "use_lateral_reward": True,
         "success_reward": 30.0,
-        "out_of_road_penalty": 15.0,
+        "out_of_road_penalty": 25.0,
         "crash_vehicle_penalty": 15.0,
         
         "out_of_road_done": True,
