@@ -40,12 +40,22 @@ def build_metadrive_config(
         "map": stage.map,
         "traffic_density": stage.traffic_density,
         
+<<<<<<< Updated upstream
         "driving_reward": 1.0,
         "speed_reward": 0.2,
         "use_lateral_reward": True,
         "success_reward": 30.0,
         "out_of_road_penalty": 15.0,
         "crash_vehicle_penalty": 15.0,
+=======
+        "success_reward": 30.0,
+        "out_of_road_penalty": 30.0,
+        "crash_vehicle_penalty": 20.0,
+        
+        "use_lateral_reward": True,
+        "driving_reward": 1.5,
+        "speed_reward": 0.1,
+>>>>>>> Stashed changes
         
         "out_of_road_done": True,
         "crash_vehicle_done": True,
