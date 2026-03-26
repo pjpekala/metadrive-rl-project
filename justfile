@@ -50,3 +50,46 @@ status:
     @echo ""
     @echo "=== Checkpoints ==="
     @ls -la models/checkpoints_*/ 2>/dev/null | head -20 || echo "No checkpoints found"
+
+# ============== SAC Training ==============
+
+# Train SAC with default LiDAR observations
+sac:
+    uv run src/sac_training/train.py --n-envs 8 --total-timesteps 1000000
+
+# Train SAC with custom settings
+sac-train n timesteps:
+    uv run src/sac_training/train.py --n-envs {{n}} --total-timesteps {{timesteps}}
+
+# Train SAC with BEV image observations
+sac-bev:
+    uv run src/sac_training/train.py --bev --n-envs 8 --total-timesteps 1000000
+
+# Train SAC with BEV custom settings
+sac-bev-train n timesteps:
+    uv run src/sac_training/train.py --bev --n-envs {{n}} --total-timesteps {{timesteps}}
+
+# Train SAC with live rendering (watch the car drive!)
+sac-live:
+    uv run src/sac_training/train.py --live-render --n-envs 1 --total-timesteps 100000
+
+# Train SAC with BEV + live rendering
+sac-bev-live:
+    uv run src/sac_training/train.py --bev --live-render --n-envs 1 --total-timesteps 100000
+
+# Train SAC with video recording
+sac-video:
+    uv run src/sac_training/train.py --record-video --video-interval 50 --n-envs 4 --total-timesteps 1000000
+
+# Test trained SAC model
+sac-test:
+    uv run src/sac_training/train.py --test models/sac_metadrive/sac_metadrive_final --test-episodes 10
+
+# Replay SAC agent (watch trained agent drive)
+sac-replay:
+    uv run src/sac_training/train.py --test models/sac_metadrive/sac_metadrive_final --test-episodes 3 --render
+
+# Clean SAC models and logs
+clean-sac:
+    rm -rf models/sac_metadrive/
+    rm -rf logs/run_sac_metadrive/

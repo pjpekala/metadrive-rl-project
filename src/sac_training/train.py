@@ -31,7 +31,9 @@ import os
 import argparse
 import time
 from pathlib import Path
+from dataclasses import dataclass
 from metadrive.envs import MetaDriveEnv
+from metadrive.envs.top_down_env import TopDownMetaDriveEnvV2
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecVideoRecorder
@@ -45,6 +47,18 @@ try:
 except ImportError:
     IMAGEIO_AVAILABLE = False
     print("Warning: imageio not available. Video recording disabled.")
+
+
+@dataclass
+class BEVSensorConfig:
+    """Configuration for BEV (bird's-eye view) sensor."""
+
+    frame_skip: int = 5
+    frame_stack: int = 3
+    post_stack: int = 5
+    norm_pixel: bool = True
+    resolution_size: int = 84
+    distance: int = 30
 
 
 class VideoRecorderCallback(BaseCallback):
@@ -311,6 +325,61 @@ def create_metadrive_env(render=False, render_mode='rgb_array'):
     return env
 
 
+def create_bev_env(
+    render: bool = False,
+    render_mode: str = 'rgb_array',
+    bev_config: BEVSensorConfig = None,
+):
+    """
+    Create a MetaDrive environment with BEV (bird's-eye view) image observations.
+    
+    Args:
+        render: Whether to render the environment
+        render_mode: 'rgb_array' for video recording, 'onscreen' for live window
+        bev_config: BEV sensor configuration (uses defaults if None)
+    """
+    if bev_config is None:
+        bev_config = BEVSensorConfig()
+    
+    config = dict(
+        # BEV sensor configuration
+        frame_skip=bev_config.frame_skip,
+        frame_stack=bev_config.frame_stack,
+        post_stack=bev_config.post_stack,
+        norm_pixel=bev_config.norm_pixel,
+        resolution_size=bev_config.resolution_size,
+        distance=bev_config.distance,
+        
+        # Environment settings
+        use_render=render,
+        manual_control=False,
+        
+        # Map configuration
+        start_seed=1000,
+        num_scenarios=1000,
+        traffic_density=0.1,
+        
+        # Episode settings
+        horizon=2000,
+        
+        # Reward shaping (same as original SAC)
+        driving_reward=1.0,
+        speed_reward=0.1,
+        out_of_road_penalty=5.0,
+        crash_vehicle_penalty=5.0,
+        crash_object_penalty=5.0,
+        success_reward=10.0,
+        out_of_route_done=True,
+        
+        # Rendering settings (when render=True)
+        window_size=(1200, 800) if render else (800, 600),
+    )
+    
+    env = TopDownMetaDriveEnvV2(config=config)
+    env = Monitor(env)
+    return env
+
+
 def train_sac_agent(
     total_timesteps=1000_000,
     learning_rate=3e-4,
@@ -326,9 +395,15 @@ def train_sac_agent(
     video_interval=50,
     plot_interval=100,
     device='cuda',
+    use_bev=False,
+    bev_config=None,
 ):
     """
     Train a SAC agent on MetaDrive with visualization options
+    
+    Args:
+        use_bev: Use BEV (bird's-eye view) image observations instead of default LiDAR
+        bev_config: BEV sensor configuration (uses defaults if None and use_bev=True)
     """
     
     # Create directories
@@ -345,6 +420,7 @@ def train_sac_agent(
     print("MetaDrive SAC Training")
     print("=" * 70)
     print(f"Device: {device}")
+    print(f"Observation: {'BEV (84x84 image)' if use_bev else 'LiDAR (default)'}")
     print(f"Number of parallel environments: {n_envs}")
     print(f"Live rendering: {'YES - Training window will show car driving!' if live_render else 'No'}")
     print(f"Video recording: {'YES - Best episodes saved to ' + video_dir if record_video else 'No'}")
@@ -353,29 +429,38 @@ def train_sac_agent(
         print("\n⚠️  WARNING: Live rendering works best with --n-envs 1")
         print("   Multiple envs will only show the first environment")
     print("=" * 70)
+    
+    # Determine which environment factory to use
+    if use_bev:
+        env_factory = lambda render=False, mode='rgb_array': create_bev_env(
+            render=render, render_mode=mode, bev_config=bev_config
+        )
+    else:
+        env_factory = create_metadrive_env
+    
     # Create training environments
     print("\nCreating training environments...")
     if live_render:
         # For live rendering, use single env with onscreen rendering
         print("🎮 Setting up LIVE RENDERING - You'll see the car drive!")
-        env = DummyVecEnv([lambda: create_metadrive_env(render=True, render_mode='onscreen')])
+        env = DummyVecEnv([lambda: env_factory(render=True, render_mode='onscreen')])
     elif n_envs > 1:
         # For parallel training, MUST use SubprocVecEnv (MetaDrive doesn't support multiple envs in same process)
         print(f"Using SubprocVecEnv with {n_envs} parallel environments")
         env = make_vec_env(
-            lambda: create_metadrive_env(render=False),
+            lambda: env_factory(render=False),
             n_envs=n_envs,
             seed=0,
             vec_env_cls=SubprocVecEnv
         )
     else:
-        env = DummyVecEnv([lambda: create_metadrive_env(render=False)])
+        env = DummyVecEnv([lambda: env_factory(render=False)])
     
     # Create separate environment for video recording
     video_env = None
     if record_video and IMAGEIO_AVAILABLE:
         print("📹 Setting up video recording environment...")
-        video_env = create_metadrive_env(render=True, render_mode='rgb_array')
+        video_env = env_factory(render=True, render_mode='rgb_array')
     
     print("\nEnvironment created successfully!")
     print(f"Observation space: {env.observation_space}")
@@ -385,9 +470,13 @@ def train_sac_agent(
     print("Initializing SAC Agent...")
     print("=" * 70)
     
+    # Choose policy based on observation type
+    policy = "CnnPolicy" if use_bev else "MlpPolicy"
+    print(f"Using policy: {policy}")
+    
     # Initialize SAC agent
     model = SAC(
-        "MlpPolicy",
+        policy,
         env,
         learning_rate=learning_rate,
         buffer_size=buffer_size,
@@ -567,6 +656,9 @@ Examples:
   # Fast training with video recording every 50 episodes
   uv run src/sac_training/train.py --record-video --video-interval 50 --n-envs 4
   
+  # BEV image observations training
+  uv run src/sac_training/train.py --bev --n-envs 4
+  
   # Everything enabled (live render + videos + plots)
   uv run src/sac_training/train.py --live-render --record-video --visualize --n-envs 1
   
@@ -594,6 +686,8 @@ Examples:
                        help='Test a trained model (provide path)')
     parser.add_argument('--test-episodes', type=int, default=10,
                        help='Number of test episodes')
+    parser.add_argument('--bev', action='store_true',
+                       help='Use BEV (bird\'s-eye view) image observations instead of default LiDAR')
     
     args = parser.parse_args()
     
@@ -626,6 +720,7 @@ Examples:
             "video_interval": args.video_interval,
             "plot_interval": args.plot_interval,
             "device": args.device,
+            "use_bev": args.bev,
         }
         
         trained_model = train_sac_agent(**TRAINING_CONFIG)
