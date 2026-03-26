@@ -48,6 +48,8 @@ except ImportError:
     IMAGEIO_AVAILABLE = False
     print("Warning: imageio not available. Video recording disabled.")
 
+from bev_cnn import get_bev_cnn_config
+
 
 @dataclass
 class BEVSensorConfig:
@@ -325,6 +327,16 @@ def create_metadrive_env(render=False, render_mode='rgb_array'):
     return env
 
 
+class TopDownMetaDriveEnvWrapper(TopDownMetaDriveEnvV2):
+    """Wrapper to handle seed modulo operation for parallel environments"""
+
+    def reset(self, seed=None, **kwargs):
+        # Wrap seed to valid range if provided
+        if seed is not None and self.config["num_scenarios"] > 0:
+            seed = self.config["start_seed"] + (seed % self.config["num_scenarios"])
+        return super().reset(seed=seed, **kwargs)
+
+
 def create_bev_env(
     render: bool = False,
     render_mode: str = 'rgb_array',
@@ -332,7 +344,7 @@ def create_bev_env(
 ):
     """
     Create a MetaDrive environment with BEV (bird's-eye view) image observations.
-    
+
     Args:
         render: Whether to render the environment
         render_mode: 'rgb_array' for video recording, 'onscreen' for live window
@@ -340,7 +352,7 @@ def create_bev_env(
     """
     if bev_config is None:
         bev_config = BEVSensorConfig()
-    
+
     config = dict(
         # BEV sensor configuration
         frame_skip=bev_config.frame_skip,
@@ -349,19 +361,19 @@ def create_bev_env(
         norm_pixel=bev_config.norm_pixel,
         resolution_size=bev_config.resolution_size,
         distance=bev_config.distance,
-        
+
         # Environment settings
         use_render=render,
         manual_control=False,
-        
+
         # Map configuration
         start_seed=1000,
         num_scenarios=1000,
         traffic_density=0.1,
-        
+
         # Episode settings
         horizon=2000,
-        
+
         # Reward shaping (same as original SAC)
         driving_reward=1.0,
         speed_reward=0.1,
@@ -370,12 +382,12 @@ def create_bev_env(
         crash_object_penalty=5.0,
         success_reward=10.0,
         out_of_route_done=True,
-        
+
         # Rendering settings (when render=True)
         window_size=(1200, 800) if render else (800, 600),
     )
-    
-    env = TopDownMetaDriveEnvV2(config=config)
+
+    env = TopDownMetaDriveEnvWrapper(config=config)
     env = Monitor(env)
     return env
 
@@ -394,18 +406,29 @@ def train_sac_agent(
     record_video=False,
     video_interval=50,
     plot_interval=100,
-    device='cuda',
+    device='auto',
     use_bev=False,
     bev_config=None,
 ):
     """
     Train a SAC agent on MetaDrive with visualization options
-    
+
     Args:
+        device: Device to use ('cuda', 'cpu', or 'auto' for auto-detect)
         use_bev: Use BEV (bird's-eye view) image observations instead of default LiDAR
         bev_config: BEV sensor configuration (uses defaults if None and use_bev=True)
     """
-    
+
+    # Auto-detect device if set to 'auto'
+    import torch
+    if device == 'auto':
+        if torch.cuda.is_available():
+            device = 'cuda'
+            print("✓ CUDA detected - using GPU for training")
+        else:
+            device = 'cpu'
+            print("ℹ CUDA not available - using CPU for training")
+
     # Create directories
     os.makedirs(save_dir, exist_ok=True)
     log_dir = os.path.join(save_dir, "logs")
@@ -415,7 +438,7 @@ def train_sac_agent(
     os.makedirs(checkpoint_dir, exist_ok=True)
     if record_video:
         os.makedirs(video_dir, exist_ok=True)
-    
+
     print("=" * 70)
     print("MetaDrive SAC Training")
     print("=" * 70)
@@ -473,15 +496,28 @@ def train_sac_agent(
     # Choose policy based on observation type
     policy = "CnnPolicy" if use_bev else "MlpPolicy"
     print(f"Using policy: {policy}")
-    
+
+    # Build policy_kwargs - add BEV CNN for image observations
+    policy_kwargs = {}
+    effective_batch_size = batch_size
+    if use_bev:
+        policy_kwargs = get_bev_cnn_config(features_dim=256)
+        # Use memory-efficient settings for BEV to fit in 16GB RAM
+        effective_buffer_size = min(buffer_size, 50_000)
+        effective_batch_size = min(batch_size, 128)  # Smaller batches for memory
+        print(f"Using custom BEVCNN feature extractor (5-channel, 256 features)")
+        print(f"BEV mode: buffer_size={effective_buffer_size:,}, batch_size={effective_batch_size}")
+    else:
+        effective_buffer_size = buffer_size
+
     # Initialize SAC agent
     model = SAC(
         policy,
         env,
         learning_rate=learning_rate,
-        buffer_size=buffer_size,
+        buffer_size=effective_buffer_size,
         learning_starts=learning_starts,
-        batch_size=batch_size,
+        batch_size=effective_batch_size,
         tau=0.005,
         gamma=0.99,
         train_freq=1,
@@ -490,6 +526,7 @@ def train_sac_agent(
         verbose=1,
         tensorboard_log=log_dir,
         device=device,
+        policy_kwargs=policy_kwargs,
     )
     
     print(f"\nUsing device: {model.device}")
@@ -508,15 +545,16 @@ def train_sac_agent(
     )
     callbacks.append(checkpoint_callback)
     
-    # Visualization callback
-    viz_callback = VisualizationCallback(
-        render_env=None,
-        render_interval=999999,
-        plot_interval=plot_interval,
-        verbose=1,
-    )
-    callbacks.append(viz_callback)
-    
+    # Visualization callback - only add if visualize=True
+    if visualize:
+        viz_callback = VisualizationCallback(
+            render_env=None,
+            render_interval=999999,
+            plot_interval=plot_interval,
+            verbose=1,
+        )
+        callbacks.append(viz_callback)
+
     # Video recording callback
     if record_video and video_env is not None:
         video_callback = VideoRecorderCallback(
@@ -554,7 +592,8 @@ def train_sac_agent(
     except KeyboardInterrupt:
         print("\n\nTraining interrupted by user!")
     finally:
-        if viz_callback.fig is not None:
+        # Only save plots if visualization was enabled
+        if visualize and 'viz_callback' in locals() and viz_callback.fig is not None:
             plt.ioff()
             plt.savefig(os.path.join(save_dir, 'training_progress.png'), dpi=150)
             print(f"\nTraining plots saved to: {os.path.join(save_dir, 'training_progress.png')}")
@@ -680,8 +719,8 @@ Examples:
                        help='Enable live training plots')
     parser.add_argument('--plot-interval', type=int, default=200,
                        help='Update training plots every N steps')
-    parser.add_argument('--device', type=str, default='cuda',
-                       help='Device: auto, cuda, cpu, or cuda:0, cuda:1, etc.')
+    parser.add_argument('--device', type=str, default='auto',
+                       help='Device: auto (default, detects CUDA), cuda, cpu, or cuda:0, cuda:1, etc.')
     parser.add_argument('--test', type=str, default=None,
                        help='Test a trained model (provide path)')
     parser.add_argument('--test-episodes', type=int, default=10,
@@ -712,7 +751,7 @@ Examples:
             "learning_starts": 1000,
             "batch_size": 256,
             "n_envs": args.n_envs,
-            "save_dir": "models/sac_metadrive",
+            "save_dir": "models/sac_metadrive_bev" if args.bev else "models/sac_metadrive",
             "save_freq": 10000,
             "visualize": args.visualize,
             "live_render": args.live_render,
@@ -722,14 +761,16 @@ Examples:
             "device": args.device,
             "use_bev": args.bev,
         }
-        
+
         trained_model = train_sac_agent(**TRAINING_CONFIG)
-        
+
         print("\n\n" + "="*70)
         print("NEXT STEPS")
         print("="*70)
         print("To test the trained agent with live rendering:")
-        print(f"  uv run src/sac_training/train.py --test models/sac_metadrive/sac_metadrive_final")
+        test_model_path = "models/sac_metadrive_bev/sac_metadrive_final" if args.bev else "models/sac_metadrive/sac_metadrive_final"
+        print(f"  uv run src/sac_training/train.py --test {test_model_path}")
         if args.record_video:
-            print(f"\nVideos saved in: models/sac_metadrive/videos/")
+            videos_dir = "models/sac_metadrive_bev/videos/" if args.bev else "models/sac_metadrive/videos/"
+            print(f"\nVideos saved in: {videos_dir}")
         print("="*70)
