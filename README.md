@@ -82,6 +82,169 @@ Training saves to:
 
 **Stage indexing is 1-based** (e.g., `--stage 1` is the first stage, `--stage 2` is the second). The number of available stages depends on the curriculum.
 
+### SAC (Soft Actor-Critic) Training
+
+The project includes a modern SAC training framework with support for multiple sensor types. Located in `src/sac_training/`, this provides an alternative to PPO with built-in multi-sensor support.
+
+#### Quick Start
+
+```bash
+# Train with BEV (Bird's Eye View) - semantic maps with CNN
+uv run src/sac_training/train.py --sensor-type bev
+
+# Train with LiDAR (default, fastest baseline)
+uv run src/sac_training/train.py --sensor-type lidar
+
+# Train with RGB camera
+uv run src/sac_training/train.py --sensor-type rgb
+
+# Train with Dense-LiDAR (high-resolution point cloud)
+uv run src/sac_training/train.py --sensor-type dense-lidar
+```
+
+#### Supported Sensors
+
+| Sensor | Observation | Policy | Best For | Speed |
+|--------|-------------|--------|----------|-------|
+| **LiDAR** | 240-point cloud vector | MlpPolicy | Fast baseline, interpretability | ⚡⚡⚡ Fast |
+| **BEV** ✨ | 84×84×5 semantic map | CnnPolicy | Spatial reasoning, semantic info | ⚡⚡ Medium |
+| **RGB** | 84×84×3 camera image | CnnPolicy | Human vision similarity, sim-to-real | ⚡⚡ Medium |
+| **Dense-LiDAR** | 720-point cloud vector | MlpPolicy | Fine-grained obstacle detection | ⚡ Slowest |
+
+**BEV (Bird's Eye View)** is the new recommended sensor type. It provides 5-channel semantic maps:
+- Channel 0: Road surface
+- Channel 1: Lane markings
+- Channel 2: Navigation route
+- Channel 3: Other vehicles
+- Channel 4: Pedestrians
+
+These labeled features enable the agent to learn more robust driving policies compared to raw point clouds.
+
+#### Training Commands
+
+```bash
+# Basic training (8 parallel envs, 1M timesteps)
+uv run src/sac_training/train.py --sensor-type bev
+
+# Custom configuration
+uv run src/sac_training/train.py \
+  --sensor-type bev \
+  --n-envs 8 \
+  --total-timesteps 2_000_000 \
+  --learning-rate 3e-4 \
+  --batch-size 256
+
+# With video recording (saves episodes every 50 steps)
+uv run src/sac_training/train.py \
+  --sensor-type bev \
+  --record-video \
+  --video-interval 50
+
+# Live training (watch agent learn, requires n_envs=1)
+uv run src/sac_training/train.py \
+  --sensor-type lidar \
+  --live-render \
+  --n-envs 1
+
+# With visualization and live plotting
+uv run src/sac_training/train.py \
+  --sensor-type bev \
+  --visualize \
+  --plot-interval 200
+```
+
+#### Training Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--sensor-type` | `lidar` | Sensor type: `lidar`, `bev`, `rgb`, or `dense-lidar` |
+| `--total-timesteps` | 1,000,000 | Total environment steps (~1M = 20-30 hours on 8 envs) |
+| `--n-envs` | 8 | Parallel environments (more = faster collection, more memory) |
+| `--learning-rate` | 3e-4 | Actor/critic learning rate |
+| `--batch-size` | 256 | Samples per gradient update (image sensors capped at 128) |
+| `--buffer-size` | 1,000,000 | Replay buffer capacity (image sensors capped at 50K) |
+| `--learning-starts` | 1000 | Steps before training starts (buffer population) |
+| `--tau` | 0.005 | Soft update rate for target networks |
+| `--gamma` | 0.99 | Discount factor for future rewards |
+| `--record-video` | False | Record episode videos |
+| `--video-interval` | 50 | Record video every N episodes |
+| `--live-render` | False | Show live rendering during training |
+| `--visualize` | False | Enable live metric visualization |
+| `--plot-interval` | 200 | Update plots every N steps |
+
+#### Evaluation
+
+```bash
+# Test a trained model
+uv run src/sac_training/train.py \
+  --test models/sac_metadrive_lidar/sac_metadrive_final \
+  --sensor-type lidar
+
+# Programmatic evaluation
+from src.sac_training import test_trained_agent
+
+results = test_trained_agent(
+    model_path="models/sac_metadrive_bev/sac_metadrive_final",
+    sensor_type="bev",
+    num_episodes=50,
+    render=True
+)
+# results: success_rate, mean_reward, mean_length, etc.
+```
+
+#### Model Checkpoints & Saving
+
+Models are saved to `models/sac_metadrive_{sensor_type}/`:
+```
+models/sac_metadrive_bev/
+├── sac_metadrive_120000_steps.zip     # Checkpoint at 120K steps
+├── sac_metadrive_240000_steps.zip     # Checkpoint at 240K steps
+├── ...
+└── sac_metadrive_final.zip            # Final trained model
+```
+
+Checkpoints are saved every 120,000 steps by default. Use `--save-freq` to customize.
+
+#### Important Notes
+
+- **Image Sensors (BEV/RGB):** Buffer size automatically capped at 50K and batch size at 128 to prevent excessive memory usage (each image is ~35KB)
+- **Live Rendering:** Only works with `--n-envs 1` (rendering multiple parallel environments isn't supported)
+- **BEV Frame Stacking:** The BEV sensor stacks 3 consecutive observations for temporal information
+- **Video Recording:** Spawns a separate environment; training continues in parallel
+- **Sensor Selection:**
+  - Use **LiDAR** for fast baselines and memory-constrained settings
+  - Use **BEV** for semantic reasoning and labeled observations
+  - Use **RGB** for sim-to-real transfer research
+  - Use **Dense-LiDAR** for fine-grained obstacle detection
+
+#### API Reference
+
+```python
+from src.sac_training import (
+    # Configurations
+    BEVConfig, LiDARConfig, RGBConfig, TrainingConfig,
+    
+    # Utilities
+    SensorFactory, EnvironmentFactory,
+    get_policy_type, is_image_observation,
+    
+    # Training
+    SACTrainer, test_trained_agent,
+    
+    # Feature extractors
+    BEVCNN, RGBCNN,
+)
+
+# Create a trainer
+trainer = SACTrainer(
+    sensor_type="bev",
+    config=TrainingConfig(total_timesteps=1_000_000, n_envs=8)
+)
+
+# Train the model
+model = trainer.train(visualize=True, record_video=True)
+```
+
 ### Monitoring
 
 ```bash
