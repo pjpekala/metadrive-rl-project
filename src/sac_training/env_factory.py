@@ -12,6 +12,7 @@ Usage:
 
 from typing import Optional, Any
 
+from gymnasium import Wrapper, spaces
 from metadrive.envs import MetaDriveEnv
 from metadrive.envs.top_down_env import TopDownMetaDriveEnvV2
 from stable_baselines3.common.monitor import Monitor
@@ -58,6 +59,69 @@ class MetaDriveEnvWrapper(MetaDriveEnv):
         if seed is not None and self.config["num_scenarios"] > 0:
             seed = self.config["start_seed"] + (seed % self.config["num_scenarios"])
         return super().reset(seed=seed, **kwargs)
+    
+    def step(self, action: Any) -> tuple:
+        """Step the environment.
+        
+        For RGB observations, extracts the RGB camera from dict observations.
+        
+        Args:
+            action: Environment action
+            
+        Returns:
+            Tuple of (observation, reward, done, truncated, info)
+        """
+        obs, reward, done, truncated, info = super().step(action)
+        # If image_observation is True and we have a dict observation,
+        # extract just the image source for RGB training
+        if self.config.get("image_observation") and isinstance(obs, dict):
+            image_source = self.config.get("vehicle_config", {}).get("image_source")
+            if image_source and image_source in obs:
+                obs = obs[image_source]
+        return obs, reward, done, truncated, info
+
+
+class RGBObservationWrapper(Wrapper):
+    """Wrapper to extract RGB camera observation from dict observations.
+    
+    When MetaDrive environment has image_observation=True, observations are dicts
+    containing 'image' and 'state'. This wrapper extracts just the image for training.
+    """
+    
+    def __init__(self, env: MetaDriveEnv, image_source: str = "front") -> None:
+        """Initialize the wrapper.
+        
+        Args:
+            env: MetaDrive environment
+            image_source: Name of the image sensor to extract (used for RGB camera only)
+        """
+        super().__init__(env)
+        
+        # Get the observation space of just the image
+        if isinstance(env.observation_space, spaces.Dict):
+            if "image" in env.observation_space.spaces:
+                self.observation_space = env.observation_space.spaces["image"]
+            else:
+                raise ValueError(
+                    f"'image' not found in observation space. "
+                    f"Available: {list(env.observation_space.spaces.keys())}"
+                )
+        else:
+            self.observation_space = env.observation_space
+    
+    def reset(self, **kwargs: Any) -> tuple:
+        """Reset and extract RGB observation."""
+        obs, info = self.env.reset(**kwargs)
+        if isinstance(obs, dict) and "image" in obs:
+            obs = obs["image"]
+        return obs, info
+    
+    def step(self, action: Any) -> tuple:
+        """Step and extract RGB observation."""
+        obs, reward, done, truncated, info = self.env.step(action)
+        if isinstance(obs, dict) and "image" in obs:
+            obs = obs["image"]
+        return obs, reward, done, truncated, info
 
 
 class TopDownMetaDriveEnvWrapper(TopDownMetaDriveEnvV2):
@@ -163,6 +227,11 @@ class EnvironmentFactory:
             env = TopDownMetaDriveEnvWrapper(config=config)
         else:
             env = MetaDriveEnvWrapper(config=config)
+        
+        # For RGB, wrap to extract just the RGB camera observation from dict
+        if sensor_type == "rgb":
+            image_source = config.get("vehicle_config", {}).get("image_source", "front")
+            env = RGBObservationWrapper(env, image_source=image_source)
         
         # Wrap with Monitor for episode tracking
         env = Monitor(env)

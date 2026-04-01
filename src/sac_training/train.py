@@ -414,7 +414,7 @@ Examples:
   uv run src/sac_training/train.py --sensor-type lidar --record-video --video-interval 50 --n-envs 4
   
   # Test a trained model
-  uv run src/sac_training/train.py --test models/sac_metadrive_lidar/sac_metadrive_final --sensor-type lidar
+  uv run -m src.sac_training.train --test models/sac_metadrive_lidar/sac_metadrive_final --sensor-type lidar
   
   # Legacy: use --bev flag (maps to --sensor-type bev)
   uv run src/sac_training/train.py --bev --n-envs 8
@@ -562,7 +562,7 @@ Examples:
         print("NEXT STEPS")
         print("=" * 70)
         print(f"To test the trained agent with live rendering:")
-        print(f"  uv run src/sac_training/train.py --test {trainer.save_dir}/sac_metadrive_final --sensor-type {args.sensor_type}")
+        print(f"  uv run -m src.sac_training.train --test {trainer.save_dir}/sac_metadrive_final --sensor-type {args.sensor_type}")
         if args.record_video:
             print(f"\nVideos saved in: {trainer.save_dir}/videos/")
         print("=" * 70)

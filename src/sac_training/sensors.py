@@ -125,11 +125,22 @@ class SensorFactory:
             config["vehicle_config"]["lidar"] = sensor_specific
         # For RGB configs, set up front camera sensor
         elif sensor_type == "rgb":
+            from metadrive.component.sensors.rgb_camera import RGBCamera
+            
             config["image_observation"] = True
             config["norm_pixel"] = True
             if "vehicle_config" not in config:
                 config["vehicle_config"] = {}
             config["vehicle_config"]["image_source"] = "front"
+            
+            # For RGB, use only the RGB camera sensor (remove default sensors)
+            config["sensors"] = {
+                "front": (
+                    RGBCamera,
+                    sensor_config.resolution_size,
+                    sensor_config.resolution_size,
+                )
+            }
         else:
             config.update(sensor_specific)
         
@@ -261,7 +272,7 @@ def is_image_observation(sensor_type: str) -> bool:
 def get_policy_type(sensor_type: str) -> str:
     """Get the appropriate policy type for a sensor.
     
-    Image observations use CnnPolicy, while LiDAR uses MlpPolicy.
+    Image observations (BEV, RGB) use CnnPolicy, while LiDAR uses MlpPolicy.
     
     Args:
         sensor_type: Type of sensor

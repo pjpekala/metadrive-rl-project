@@ -44,7 +44,7 @@ class ModularCNN(BaseFeaturesExtractor):
         """Initialize the modular CNN.
         
         Args:
-            observation_space: Gymnasium Box space with shape (H, W, C) or (C, H, W)
+            observation_space: Gymnasium Box space with shape (H, W, C), (C, H, W), or (H, W, C, frames)
             features_dim: Number of features to output
             normalized_image: Whether images are already normalized to [0, 1]
         """
@@ -59,13 +59,19 @@ class ModularCNN(BaseFeaturesExtractor):
         
         # Compute the flattened size after convolutions
         # Extract actual image dimensions from observation space
-        if len(observation_space.shape) == 3:
-            if observation_space.shape[2] in [1, 3, 5]:
+        shape = observation_space.shape
+        if len(shape) == 3:
+            if shape[2] in [1, 3, 5]:
                 # Channel-last format: (H, W, C)
-                height, width = observation_space.shape[0], observation_space.shape[1]
+                height, width = shape[0], shape[1]
             else:
                 # Channel-first format: (C, H, W)
-                height, width = observation_space.shape[1], observation_space.shape[2]
+                height, width = shape[1], shape[2]
+        elif len(shape) == 4:
+            # Frame-stacked observation: (H, W, C, frames)
+            height, width = shape[0], shape[1]
+        else:
+            raise ValueError(f"Unexpected observation shape: {shape}")
         
         with torch.no_grad():
             sample = torch.zeros(1, self.n_input_channels, height, width)
@@ -81,6 +87,9 @@ class ModularCNN(BaseFeaturesExtractor):
     def _get_input_channels(self, observation_space: spaces.Box) -> int:
         """Determine number of input channels from observation space.
         
+        Handles both 3D and 4D observations. For 4D observations (with frame stacking),
+        multiplies the channel dimension by the frame stack dimension.
+        
         Args:
             observation_space: Gymnasium Box space
             
@@ -88,18 +97,29 @@ class ModularCNN(BaseFeaturesExtractor):
             Number of input channels
             
         Raises:
-            ValueError: If observation space is not 3D
+            ValueError: If observation space is not 3D or 4D
         """
-        if len(observation_space.shape) != 3:
-            raise ValueError(
-                f"Expected 3D observation space, got shape: {observation_space.shape}"
-            )
+        shape = observation_space.shape
         
-        # Check if channel-last format: (H, W, C)
-        if observation_space.shape[2] in [1, 3, 5]:
-            return observation_space.shape[2]
-        # Channel-first format: (C, H, W)
-        return observation_space.shape[0]
+        if len(shape) == 3:
+            # Standard 3D observation: (H, W, C) or (C, H, W)
+            if shape[2] in [1, 3, 5]:
+                # Channel-last format: (H, W, C)
+                return shape[2]
+            # Channel-first format: (C, H, W)
+            return shape[0]
+        elif len(shape) == 4:
+            # Frame-stacked observation: (H, W, C, frames) or similar
+            # Treat the last dimension as additional stacked frames
+            if shape[2] in [1, 3, 5]:
+                # Channel-last format: (H, W, C, frames)
+                return shape[2] * shape[3]
+            # Channel-first format or other: multiply channels by frames
+            return shape[0] * shape[3]
+        else:
+            raise ValueError(
+                f"Expected 3D or 4D observation space, got shape: {shape}"
+            )
     
     def _build_cnn(self, n_input_channels: int) -> nn.Module:
         """Build CNN layers. Override in subclasses.
@@ -134,6 +154,8 @@ class ModularCNN(BaseFeaturesExtractor):
     def _prepare_channels(self, observations: torch.Tensor) -> torch.Tensor:
         """Prepare observations by ensuring channel-first format.
         
+        Handles both standard 4D tensors and frame-stacked 5D tensors.
+        
         Args:
             observations: Input observations tensor
             
@@ -144,8 +166,14 @@ class ModularCNN(BaseFeaturesExtractor):
         if observations.dim() == 3:
             observations = observations.unsqueeze(0)
         
+        # Handle 5D frame-stacked observations: (B, H, W, C, frames)
+        # Reshape to (B, H, W, C*frames) then permute to (B, C*frames, H, W)
+        if observations.dim() == 5:
+            batch, h, w, c, frames = observations.shape
+            observations = observations.permute(0, 1, 2, 3, 4).reshape(batch, h, w, c * frames)
+        
         # Check if we need to permute from (B, H, W, C) to (B, C, H, W)
-        if observations.shape[-1] in [1, 3, 5] and len(observations.shape) == 4:
+        if observations.shape[-1] in [1, 3, 5, 9] and len(observations.shape) == 4:
             observations = observations.permute(0, 3, 1, 2)
         
         return observations
