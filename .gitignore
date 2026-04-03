@@ -24,7 +24,7 @@ Thumbs.db
 
 # Logs and Models
 logs/
-models/
+#models/
 *.log
 *.tfevents*
 *.pt
