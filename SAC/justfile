@@ -1,0 +1,28 @@
+# Development Workflow Commands for SAC
+
+## Setup
+Builds and installs project dependencies using `uv`.
+$ just setup
+
+## Linting
+Runs `ruff` across the core source directory (`src/`) to check for style violations and potential errors.
+$ just lint
+
+## Testing
+Runs the entire test suite using `pytest`.
+$ just test
+
+## Single Test
+Runs tests for a specific file. Usage: just test-single -- {path/to/test_file.py}
+$ just test-single -- {test_file}
+
+## Utility Targets
+Sets up common workflows:
+
+### Evaluate Model
+Runs the standard evaluation process with video recording for the sparse LiDAR model.
+$ just evaluate
+
+## Cleanup
+Removes generated model, log, and data files.
+$ just clean

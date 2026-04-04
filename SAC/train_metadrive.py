@@ -36,6 +36,7 @@ import csv
 import time
 import signal
 import atexit
+import gc
 from pathlib import Path
 from typing import Any, Optional
 
@@ -46,6 +47,8 @@ np.int = np.int64
 np.bool = np.bool_
 
 from metadrive.envs import MetaDriveEnv
+from metadrive.component.sensors.rgb_camera import RGBCamera
+from metadrive.component.sensors.base_camera import BaseCamera
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
@@ -67,19 +70,19 @@ MODALITY_CONFIG = {
         "lidar_distance": 100,
         "image_observation": False,
     },
-    "bev": {
-        "description": "Semantic BEV (128x128)",
-        "policy": "CnnPolicy",
-        "image_observation": True,
-        "camera": "topdown",
-        "image_size": 128,
-    },
-    "rgb": {
-        "description": "RGB Camera (128x128)",
-        "policy": "CnnPolicy",
-        "image_observation": True,
-        "camera": "rgb",
-        "image_size": 128,
+     "bev": {
+         "description": "Semantic BEV (96x96)",
+         "policy": "CnnPolicy",
+         "image_observation": True,
+         "camera": "topdown",
+         "image_size": 96,
+     },
+     "rgb": {
+         "description": "RGB Camera (96x96)",
+         "policy": "CnnPolicy",
+         "image_observation": True,
+         "camera": "rgb",
+         "image_size": 96,
     },
 }
 
@@ -104,33 +107,86 @@ CSV_LOG_HEADER = [
 from gymnasium import Env, spaces
 import numpy as np
 
+
 class GymToGymnasiumWrapper(Env):
     metadata = {"render_modes": []}
-    
-    def __init__(self, env):
+
+    def __init__(self, env, modality: str):
         self.env = env
-        self.observation_space = self._convert_space(env.observation_space)
-        self.action_space = self._convert_space(env.action_space)
+        self.modality = modality
+        self.observation_space = self._convert_space(
+            env.observation_space, is_observation=True
+        )
+        self.action_space = self._convert_space(env.action_space, is_observation=False)
         self._max_episode_steps = 2000
-    
-    def _convert_space(self, space):
-        if isinstance(space, spaces.Box):
-            low = np.array(space.low, dtype=np.float32) if space.low is not None else None
-            high = np.array(space.high, dtype=np.float32) if space.high is not None else None
-            return spaces.Box(
-                low=low,
-                high=high,
-                shape=space.shape,
-                dtype=np.float32
+
+    def _convert_space(self, space, is_observation: bool = True):
+        if isinstance(space, spaces.Dict):
+            # Handle Dict observation spaces from MetaDrive
+            if is_observation and self.modality in ["rgb", "bev"]:
+                # Image-based observation: Dict with 'image' and 'state' keys
+                # Extract the image space from the dict
+                image_space = space["image"]  # This is a Box space
+
+                # MetaDrive returns images with shape (H, W, C, stack_size)
+                # e.g., (128, 128, 3, 3) - height, width, channels, frame_stack
+                h, w, c, stack_size = image_space.shape
+
+                # Create observation space for channel-first format: (C, H, W)
+                # We use only the first frame, so stack dimension is dropped
+                new_shape = (c, h, w)
+                low = np.zeros(new_shape, dtype=np.float32)
+                high = np.ones(new_shape, dtype=np.float32)
+
+                return spaces.Box(low=low, high=high, shape=new_shape, dtype=np.float32)
+            else:
+                # Non-image Dict observations: convert recursively
+                return spaces.Dict(
+                    {
+                        k: self._convert_space(v, is_observation=is_observation)
+                        for k, v in space.spaces.items()
+                    }
+                )
+        elif isinstance(space, spaces.Box):
+            low = (
+                np.array(space.low, dtype=np.float32) if space.low is not None else None
             )
+            high = (
+                np.array(space.high, dtype=np.float32)
+                if space.high is not None
+                else None
+            )
+
+            # Only apply image transformation to observation spaces of image-based modalities
+            modality_config = MODALITY_CONFIG.get(
+                self.modality, MODALITY_CONFIG["sparse_lidar"]
+            )
+            if is_observation and modality_config.get("image_observation", False):
+                # For image-based modalities, construct the proper image shape (H, W, C)
+                image_size = modality_config.get("image_size", 128)
+                # RGB and BEV images are 3-channel
+                num_channels = 3
+                new_shape = (image_size, image_size, num_channels)
+
+                # Reconstruct bounds for the image tensor
+                low = np.zeros(new_shape, dtype=np.float32)
+                high = np.ones(new_shape, dtype=np.float32)
+
+                return spaces.Box(low=low, high=high, shape=new_shape, dtype=np.float32)
+
+            # For non-image observations or action spaces, use the original shape
+            return spaces.Box(low=low, high=high, shape=space.shape, dtype=np.float32)
         elif isinstance(space, spaces.Discrete):
             return spaces.Discrete(space.n)
         elif isinstance(space, spaces.Tuple):
-            return spaces.Tuple(tuple(self._convert_space(s) for s in space.spaces))
-        elif isinstance(space, spaces.Dict):
-            return spaces.Dict({k: self._convert_space(v) for k, v in space.spaces.items()})
+            return spaces.Tuple(
+                tuple(
+                    self._convert_space(s, is_observation=is_observation)
+                    for s in space.spaces
+                )
+            )
         return space
-    
+
     def reset(self, seed=None, options=None):
         result = self.env.reset(seed=seed)
         if isinstance(result, tuple):
@@ -138,8 +194,23 @@ class GymToGymnasiumWrapper(Env):
         else:
             obs = result
             info = {}
-        return obs.astype(np.float32), info
-    
+
+        # Handle Dict observations from image modalities
+        if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
+            # OPTIMIZED: Chain operations to minimize array copies
+            # Original: 3-4 copies. Optimized: 1 copy
+            obs = np.ascontiguousarray(
+                np.transpose(
+                    obs["image"][..., 0].astype(np.float32),
+                    (2, 0, 1)
+                )
+            )
+        else:
+            # Existing behavior for LiDAR modalities
+            obs = obs.astype(np.float32)
+
+        return obs, info
+
     def step(self, action):
         result = self.env.step(action)
         if len(result) == 4:
@@ -148,23 +219,41 @@ class GymToGymnasiumWrapper(Env):
             truncated = False
         else:
             obs, reward, terminated, truncated, info = result
-        return obs.astype(np.float32), reward, terminated, truncated, info
-    
-    def render(self, mode='human'):
+
+        # Handle Dict observations from image modalities
+        if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
+            # OPTIMIZED: Chain operations to minimize array copies (same as reset)
+            obs = np.ascontiguousarray(
+                np.transpose(
+                    obs["image"][..., 0].astype(np.float32),
+                    (2, 0, 1)
+                )
+            )
+        else:
+            # Existing behavior for LiDAR modalities
+            obs = obs.astype(np.float32)
+
+        return obs, reward, terminated, truncated, info
+
+    def render(self, mode="human"):
         return self.env.render(mode=mode)
-    
+
     def close(self):
         return self.env.close()
 
 
 class MetaDriveEnvWrapper(MetaDriveEnv):
-    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None, **kwargs):
+    def reset(
+        self, seed: Optional[int] = None, options: Optional[dict] = None, **kwargs
+    ):
         return super().reset(**kwargs)
 
 
-def get_env_config(modality: str, is_eval: bool = False, render: bool = False) -> dict[str, Any]:
+def get_env_config(
+    modality: str, is_eval: bool = False, render: bool = False
+) -> dict[str, Any]:
     config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["sparse_lidar"])
-    
+
     if is_eval:
         start_seed = EVAL_SEED_START
         num_scenarios = EVAL_SEED_COUNT
@@ -189,11 +278,22 @@ def get_env_config(modality: str, is_eval: bool = False, render: bool = False) -
         window_size=(1200, 800) if render else (800, 600),
         camera_height=3.0,
         camera_dist=8.0,
-
     )
 
     if config["image_observation"]:
+        # Enable image observation mode in MetaDrive
+        env_config["image_observation"] = True
+        
         camera_type = config["camera"]
+
+        # Register the camera sensor with MetaDrive
+        # IMPORTANT: Sensor name MUST match the image_source name!
+        if camera_type == "rgb":
+            env_config["sensors"] = {"rgb": (RGBCamera, 96, 96)}
+        elif camera_type == "topdown":
+            env_config["sensors"] = {"topdown": (BaseCamera, 96, 96)}
+
+        # Map vehicle config to image source
         env_config["vehicle_config"] = dict(
             image_source=camera_type,
         )
@@ -211,14 +311,44 @@ def get_env_config(modality: str, is_eval: bool = False, render: bool = False) -
     return env_config
 
 
-def create_metadrive_env(modality: str, is_eval: bool = False, render: bool = False) -> GymToGymnasiumWrapper:
+def create_metadrive_env(
+     modality: str, is_eval: bool = False, render: bool = False
+) -> GymToGymnasiumWrapper:
     config = get_env_config(modality, is_eval=is_eval, render=render)
     env = MetaDriveEnvWrapper(config=config)
-    return GymToGymnasiumWrapper(env)
+    return GymToGymnasiumWrapper(env, modality=modality)
+
+
+class GarbageCollectionCallback(BaseCallback):
+    """Periodically trigger garbage collection to reduce memory fragmentation.
+    
+    This callback forces garbage collection every N steps to prevent memory
+    fragmentation and reduce memory usage, especially important for image-based
+    observations which create many temporary array objects.
+    """
+    
+    def __init__(self, gc_freq: int = 1000, verbose: int = 0):
+        super().__init__(verbose)
+        self.gc_freq = gc_freq
+        self._step_count = 0
+    
+    def _on_step(self) -> bool:
+        self._step_count += 1
+        if self._step_count % self.gc_freq == 0:
+            gc.collect()
+            if self.verbose > 0:
+                print(f"[*] Garbage collection triggered at step {self._step_count}")
+        return True
 
 
 class AppendCSVCallback(BaseCallback):
-    def __init__(self, csv_path: str, log_freq: int = 4096, initial_timesteps: int = 0, verbose: int = 1):
+    def __init__(
+        self,
+        csv_path: str,
+        log_freq: int = 4096,
+        initial_timesteps: int = 0,
+        verbose: int = 1,
+    ):
         super().__init__(verbose)
         self.csv_path = Path(csv_path)
         self.log_freq = log_freq
@@ -261,8 +391,12 @@ class AppendCSVCallback(BaseCallback):
         return 0, 0
 
     def _on_step(self) -> bool:
-        ts = self.model.num_timesteps if hasattr(self, 'model') and self.model is not None else 0
-        
+        ts = (
+            self.model.num_timesteps
+            if hasattr(self, "model") and self.model is not None
+            else 0
+        )
+
         for info in self.locals.get("infos", [{}]):
             if "episode" in info:
                 self._ep_count += 1
@@ -294,16 +428,18 @@ class AppendCSVCallback(BaseCallback):
         mean_length = round(float(np.mean(self._lengths[-100:])), 1)
 
         with open(self.csv_path, "a", newline="") as f:
-            csv.writer(f).writerow([
-                ts,
-                self._ep_count,
-                mean_reward,
-                success_rate,
-                collision_rate,
-                out_of_road_rate,
-                mean_length,
-                mean_speed,
-            ])
+            csv.writer(f).writerow(
+                [
+                    ts,
+                    self._ep_count,
+                    mean_reward,
+                    success_rate,
+                    collision_rate,
+                    out_of_road_rate,
+                    mean_length,
+                    mean_speed,
+                ]
+            )
 
         self.logger.record("train/mean_reward", mean_reward)
         self.logger.record("train/success_rate", success_rate)
@@ -334,7 +470,7 @@ class VisualizationCallback(BaseCallback):
         self.current_episode_reward = 0
         self.current_episode_length = 0
         self.episode_count = 0
-        
+
         csv_path = Path("models") / modality / "training_log.csv"
         if csv_path.exists():
             try:
@@ -362,7 +498,9 @@ class VisualizationCallback(BaseCallback):
 
             if self.verbose > 0:
                 success_rate = np.mean(self.episode_successes[-100:]) * 100
-                avg_reward = np.mean(self.episode_rewards[-100:]) if self.episode_rewards else 0
+                avg_reward = (
+                    np.mean(self.episode_rewards[-100:]) if self.episode_rewards else 0
+                )
                 print(
                     f"[Episode {self.episode_count}] "
                     f"Reward: {self.current_episode_reward:.2f} | "
@@ -392,6 +530,15 @@ def train_sac_agent(
 ):
     modality_config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["sparse_lidar"])
     policy_type = modality_config["policy"]
+
+    # Adjust buffer size for image modalities to avoid excessive memory usage
+    if modality_config.get("image_observation", False):
+        if buffer_size == 1_000_000:  # Only if using default buffer size
+            buffer_size = 25_000
+            print(
+                f"[*] Reducing buffer size to {buffer_size} for image modality '{modality}' (conservative memory usage)"
+            )
+
     save_dir = Path(save_dir) / modality
     save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -410,7 +557,9 @@ def train_sac_agent(
     print(f"Device: {device}")
     print(f"Policy: {policy_type}")
     print(f"Parallel environments: {n_envs}")
-    print(f"Training seeds: {TRAIN_SEED_START} to {TRAIN_SEED_START + TRAIN_SEED_COUNT - 1}")
+    print(
+        f"Training seeds: {TRAIN_SEED_START} to {TRAIN_SEED_START + TRAIN_SEED_COUNT - 1}"
+    )
     print(f"Total timesteps: {total_timesteps:,}")
     print("=" * 70)
 
@@ -435,13 +584,22 @@ def train_sac_agent(
                     model.load_replay_buffer(str(replay_buffer_path))
                     print(f"[+] Replay buffer loaded from: {replay_buffer_path}")
                 except Exception as rb_e:
-                    print(f"[!] Replay buffer load failed ({rb_e}) - using current buffer.")
+                    print(
+                        f"[!] Replay buffer load failed ({rb_e}) - using current buffer."
+                    )
             model_loaded = True
         except Exception as e:
             print(f"[!] Model load failed ({e}) - starting fresh.")
 
     if not model_loaded:
         print("[>] Initializing new SAC model...")
+
+        # For image-based policies, we need to set normalize_images=False
+        # since our images are already in the range [0, 1] and channel-first format
+        policy_kwargs = {}
+        if modality_config.get("image_observation", False):
+            policy_kwargs["normalize_images"] = False
+
         model = SAC(
             policy_type,
             env,
@@ -457,13 +615,16 @@ def train_sac_agent(
             verbose=1,
             tensorboard_log=str(log_dir),
             device=device,
+            policy_kwargs=policy_kwargs,
         )
 
     remaining_timesteps = max(0, total_timesteps - start_timesteps)
-    print(f"[>] Training {remaining_timesteps:,} remaining steps (budget {total_timesteps:,})")
+    print(
+        f"[>] Training {remaining_timesteps:,} remaining steps (budget {total_timesteps:,})"
+    )
 
     callbacks = []
-    
+
     callbacks.append(
         CheckpointCallback(
             save_freq=save_freq // n_envs,
@@ -473,14 +634,22 @@ def train_sac_agent(
             save_vecnormalize=True,
         )
     )
-    
-    callbacks.extend([
-        VisualizationCallback(modality=modality, verbose=1),
-        AppendCSVCallback(str(csv_log_path), log_freq=4096, initial_timesteps=start_timesteps, verbose=1),
-    ])
+
+    callbacks.extend(
+        [
+            GarbageCollectionCallback(gc_freq=1000, verbose=0),
+            VisualizationCallback(modality=modality, verbose=1),
+            AppendCSVCallback(
+                str(csv_log_path),
+                log_freq=4096,
+                initial_timesteps=start_timesteps,
+                verbose=1,
+            ),
+        ]
+    )
 
     save_model_called = False
-    
+
     def save_model_on_exit():
         nonlocal save_model_called
         if save_model_called:
@@ -497,12 +666,12 @@ def train_sac_agent(
             print(f"[!] Error saving model: {e}")
 
     atexit.register(save_model_on_exit)
-    
+
     def signal_handler(signum, frame):
         print(f"\n[!] Received signal {signum}, saving model...")
         save_model_on_exit()
         exit(0)
-    
+
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
