@@ -48,7 +48,7 @@ np.bool = np.bool_
 
 from metadrive.envs import MetaDriveEnv
 from metadrive.component.sensors.rgb_camera import RGBCamera
-from metadrive.component.sensors.base_camera import BaseCamera
+from metadrive.component.sensors.semantic_camera import SemanticCamera
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
@@ -70,19 +70,19 @@ MODALITY_CONFIG = {
         "lidar_distance": 100,
         "image_observation": False,
     },
-     "bev": {
-         "description": "Semantic BEV (96x96)",
-         "policy": "CnnPolicy",
-         "image_observation": True,
-         "camera": "topdown",
-         "image_size": 96,
-     },
-     "rgb": {
-         "description": "RGB Camera (96x96)",
-         "policy": "CnnPolicy",
-         "image_observation": True,
-         "camera": "rgb",
-         "image_size": 96,
+    "bev": {
+        "description": "Semantic BEV (96x96)",
+        "policy": "CnnPolicy",
+        "image_observation": True,
+        "camera": "topdown",
+        "image_size": 96,
+    },
+    "rgb": {
+        "description": "RGB Camera (96x96)",
+        "policy": "CnnPolicy",
+        "image_observation": True,
+        "camera": "rgb",
+        "image_size": 96,
     },
 }
 
@@ -200,10 +200,7 @@ class GymToGymnasiumWrapper(Env):
             # OPTIMIZED: Chain operations to minimize array copies
             # Original: 3-4 copies. Optimized: 1 copy
             obs = np.ascontiguousarray(
-                np.transpose(
-                    obs["image"][..., 0].astype(np.float32),
-                    (2, 0, 1)
-                )
+                np.transpose(obs["image"][..., 0].astype(np.float32), (2, 0, 1))
             )
         else:
             # Existing behavior for LiDAR modalities
@@ -224,10 +221,7 @@ class GymToGymnasiumWrapper(Env):
         if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
             # OPTIMIZED: Chain operations to minimize array copies (same as reset)
             obs = np.ascontiguousarray(
-                np.transpose(
-                    obs["image"][..., 0].astype(np.float32),
-                    (2, 0, 1)
-                )
+                np.transpose(obs["image"][..., 0].astype(np.float32), (2, 0, 1))
             )
         else:
             # Existing behavior for LiDAR modalities
@@ -291,7 +285,7 @@ def get_env_config(
         if camera_type == "rgb":
             env_config["sensors"] = {"rgb": (RGBCamera, 96, 96)}
         elif camera_type == "topdown":
-            env_config["sensors"] = {"topdown": (BaseCamera, 96, 96)}
+            env_config["sensors"] = {"topdown": (SemanticCamera, 96, 96)}
 
         # Map vehicle config to image source
         env_config["vehicle_config"] = dict(
@@ -312,7 +306,7 @@ def get_env_config(
 
 
 def create_metadrive_env(
-     modality: str, is_eval: bool = False, render: bool = False
+    modality: str, is_eval: bool = False, render: bool = False
 ) -> GymToGymnasiumWrapper:
     config = get_env_config(modality, is_eval=is_eval, render=render)
     env = MetaDriveEnvWrapper(config=config)
