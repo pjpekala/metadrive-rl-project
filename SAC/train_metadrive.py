@@ -715,6 +715,7 @@ def train_sac_agent(
             tensorboard_log=str(log_dir),
             device=device,
             policy_kwargs=policy_kwargs,
+            optimize_memory_usage=True,
         )
 
     # Compile model with torch.compile for optimized execution
@@ -766,7 +767,7 @@ def train_sac_agent(
 
     callbacks.extend(
         [
-            GarbageCollectionCallback(gc_freq=1000, verbose=0),
+            GarbageCollectionCallback(gc_freq=5000, verbose=0),
             VisualizationCallback(modality=modality, verbose=1),
             AppendCSVCallback(
                 str(csv_log_path),
