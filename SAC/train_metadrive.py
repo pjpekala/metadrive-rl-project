@@ -131,12 +131,18 @@ class GymToGymnasiumWrapper(Env):
                 image_space = space["image"]  # This is a Box space
 
                 # MetaDrive returns images with shape (H, W, C, stack_size)
-                # e.g., (128, 128, 3, 3) - height, width, channels, frame_stack
-                h, w, c, stack_size = image_space.shape
+                # e.g., (96, 96, 3, 3) - height, width, channels, frame_stack
+                if len(image_space.shape) == 4:
+                    h, w, c, stack_size = image_space.shape
+                else:
+                    # Fallback: if stack_size not in space, get it from config
+                    h, w, c = image_space.shape
+                    modality_config = MODALITY_CONFIG.get(self.modality, {})
+                    stack_size = modality_config.get("stack_size", 1)
 
-                # Create observation space for channel-first format: (C, H, W)
-                # We use only the first frame, so stack dimension is dropped
-                new_shape = (c, h, w)
+                # Create observation space for channel-first format with frame stacking: (C*stack_size, H, W)
+                # Flatten temporal dimension into channels
+                new_shape = (c * stack_size, h, w)
                 low = np.zeros(new_shape, dtype=np.float32)
                 high = np.ones(new_shape, dtype=np.float32)
 
@@ -286,8 +292,9 @@ def get_env_config(
     if config["image_observation"]:
         # Enable image observation mode in MetaDrive
         env_config["image_observation"] = True
-        
+
         camera_type = config["camera"]
+        stack_size = config.get("stack_size", 1)
 
         # Register the camera sensor with MetaDrive
         # IMPORTANT: Sensor name MUST match the image_source name!
@@ -300,6 +307,9 @@ def get_env_config(
         env_config["vehicle_config"] = dict(
             image_source=camera_type,
         )
+
+        # Configure frame stacking - MetaDrive uses ImageObservation which respects stack_size
+        env_config["stack_size"] = stack_size
     else:
         env_config["vehicle_config"] = dict(
             show_lidar=True,
@@ -324,17 +334,17 @@ def create_metadrive_env(
 
 class GarbageCollectionCallback(BaseCallback):
     """Periodically trigger garbage collection to reduce memory fragmentation.
-    
+
     This callback forces garbage collection every N steps to prevent memory
     fragmentation and reduce memory usage, especially important for image-based
     observations which create many temporary array objects.
     """
-    
+
     def __init__(self, gc_freq: int = 1000, verbose: int = 0):
         super().__init__(verbose)
         self.gc_freq = gc_freq
         self._step_count = 0
-    
+
     def _on_step(self) -> bool:
         self._step_count += 1
         if self._step_count % self.gc_freq == 0:
