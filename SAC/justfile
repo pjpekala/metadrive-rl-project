@@ -1,28 +1,178 @@
-# Development Workflow Commands for SAC
+# MetaDrive SAC Training - Justfile
+# Quick commands for training and evaluation using uv
 
-## Setup
-Builds and installs project dependencies using `uv`.
-$ just setup
+# Default values (can be overridden)
+TOTAL_TIMESTEPS := "1000000"
+N_ENVS := "8"
+DEVICE := "cuda"
+MODELS_DIR := "./models"
 
-## Linting
-Runs `ruff` across the core source directory (`src/`) to check for style violations and potential errors.
-$ just lint
+# === SETUP ===
 
-## Testing
-Runs the entire test suite using `pytest`.
-$ just test
+# Install dependencies using uv
+setup:
+    @echo "[+] Installing dependencies with uv..."
+    uv pip install -e .
+    uv pip install metadrive-simulator stable-baselines3 tensorboard imageio imageio-ffmpeg
+    @echo "[+] Setup complete!"
 
-## Single Test
-Runs tests for a specific file. Usage: just test-single -- {path/to/test_file.py}
-$ just test-single -- {test_file}
+# === TRAINING ===
 
-## Utility Targets
-Sets up common workflows:
+# Train Sparse LiDAR model
+train-sparse *ARGS:
+    uv run python train_metadrive.py \
+        --modality sparse_lidar \
+        --total-timesteps {{ TOTAL_TIMESTEPS }} \
+        --n-envs {{ N_ENVS }} \
+        --device {{ DEVICE }} \
+        {{ ARGS }}
 
-### Evaluate Model
-Runs the standard evaluation process with video recording for the sparse LiDAR model.
-$ just evaluate
+# Train Dense LiDAR model
+train-dense *ARGS:
+    uv run python train_metadrive.py \
+        --modality dense_lidar \
+        --total-timesteps {{ TOTAL_TIMESTEPS }} \
+        --n-envs {{ N_ENVS }} \
+        --device {{ DEVICE }} \
+        {{ ARGS }}
 
-## Cleanup
-Removes generated model, log, and data files.
-$ just clean
+# Train BEV (Bird's Eye View) model
+train-bev *ARGS:
+    uv run python train_metadrive.py \
+        --modality bev \
+        --total-timesteps {{ TOTAL_TIMESTEPS }} \
+        --n-envs {{ N_ENVS }} \
+        --device {{ DEVICE }} \
+        {{ ARGS }}
+
+# Train RGB Camera model
+train-rgb *ARGS:
+    uv run python train_metadrive.py \
+        --modality rgb \
+        --total-timesteps {{ TOTAL_TIMESTEPS }} \
+        --n-envs {{ N_ENVS }} \
+        --device {{ DEVICE }} \
+        {{ ARGS }}
+
+# Train all modalities (in sequence)
+train-all:
+    just train-sparse
+    just train-dense
+    just train-bev
+    just train-rgb
+
+# === EVALUATION ===
+
+# Evaluate Sparse LiDAR model
+eval-sparse *ARGS:
+    uv run python evaluate_metadrive.py \
+        --model-path {{ MODELS_DIR }}/sparse_lidar/sac_metadrive_final.zip \
+        --modality sparse_lidar \
+        {{ ARGS }}
+
+# Evaluate Dense LiDAR model
+eval-dense *ARGS:
+    uv run python evaluate_metadrive.py \
+        --model-path {{ MODELS_DIR }}/dense_lidar/sac_metadrive_final.zip \
+        --modality dense_lidar \
+        {{ ARGS }}
+
+# Evaluate BEV model
+eval-bev *ARGS:
+    uv run python evaluate_metadrive.py \
+        --model-path {{ MODELS_DIR }}/bev/sac_metadrive_final.zip \
+        --modality bev \
+        {{ ARGS }}
+
+# Evaluate RGB model
+eval-rgb *ARGS:
+    uv run python evaluate_metadrive.py \
+        --model-path {{ MODELS_DIR }}/rgb/sac_metadrive_final.zip \
+        --modality rgb \
+        {{ ARGS }}
+
+# === TENSORBOARD ===
+
+# Launch TensorBoard for Sparse LiDAR
+tb-sparse:
+    uv run tensorboard --logdir {{ MODELS_DIR }}/sparse_lidar/logs
+
+# Launch TensorBoard for Dense LiDAR
+tb-dense:
+    uv run tensorboard --logdir {{ MODELS_DIR }}/dense_lidar/logs
+
+# Launch TensorBoard for BEV
+tb-bev:
+    uv run tensorboard --logdir {{ MODELS_DIR }}/bev/logs
+
+# Launch TensorBoard for RGB
+tb-rgb:
+    uv run tensorboard --logdir {{ MODELS_DIR }}/rgb/logs
+
+# Launch TensorBoard for all logs
+tb-all:
+    uv run tensorboard --logdir {{ MODELS_DIR }}
+
+# === UTILITIES ===
+
+# Clean training artifacts (models, logs, checkpoints)
+clean:
+    @echo "[!] Cleaning training artifacts..."
+    rm -rf {{ MODELS_DIR }}/*/logs
+    rm -rf {{ MODELS_DIR }}/*/checkpoints
+    rm -f {{ MODELS_DIR }}/*/replay_buffer.pkl
+    @echo "[+] Clean complete! Models preserved."
+
+# Clean everything including trained models
+clean-all:
+    @echo "[!] Cleaning all artifacts including models..."
+    rm -rf {{ MODELS_DIR }}
+    @echo "[+] All artifacts removed!"
+
+# List available trained models
+list-models:
+    @echo "Available trained models:"
+    @find {{ MODELS_DIR }} -name "*.zip" -type f 2>/dev/null | head -20 || echo "No models found."
+
+# Show help
+help:
+    @echo "MetaDrive SAC Training - Available Commands:"
+    @echo ""
+    @echo "Setup:"
+    @echo "  just setup              - Install dependencies with uv"
+    @echo ""
+    @echo "Training (optional ARGS for extra parameters):"
+    @echo "  just train-sparse       - Train Sparse LiDAR (80 beams)"
+    @echo "  just train-dense        - Train Dense LiDAR (240 beams)"
+    @echo "  just train-bev          - Train BEV (top-down view)"
+    @echo "  just train-rgb          - Train RGB Camera"
+    @echo "  just train-all          - Train all modalities sequentially"
+    @echo ""
+    @echo "Evaluation (optional ARGS for --render, --save-video, etc.):"
+    @echo "  just eval-sparse        - Evaluate Sparse LiDAR"
+    @echo "  just eval-dense         - Evaluate Dense LiDAR"
+    @echo "  just eval-bev           - Evaluate BEV"
+    @echo "  just eval-rgb           - Evaluate RGB"
+    @echo ""
+    @echo "TensorBoard:"
+    @echo "  just tb-sparse          - Launch TensorBoard for Sparse LiDAR"
+    @echo "  just tb-dense           - Launch TensorBoard for Dense LiDAR"
+    @echo "  just tb-bev             - Launch TensorBoard for BEV"
+    @echo "  just tb-rgb             - Launch TensorBoard for RGB"
+    @echo "  just tb-all             - Launch TensorBoard for all logs"
+    @echo ""
+    @echo "Utilities:"
+    @echo "  just clean              - Remove logs and checkpoints (keep models)"
+    @echo "  just clean-all          - Remove everything including models"
+    @echo "  just list-models        - List available trained models"
+    @echo ""
+    @echo "Environment Variables (override defaults):"
+    @echo "  TOTAL_TIMESTEPS={{ TOTAL_TIMESTEPS }}"
+    @echo "  N_ENVS={{ N_ENVS }}"
+    @echo "  DEVICE={{ DEVICE }}"
+    @echo "  MODELS_DIR={{ MODELS_DIR }}"
+    @echo ""
+    @echo "Examples:"
+    @echo "  just train-sparse --total-timesteps 500000"
+    @echo "  just eval-sparse --render --save-video"
+    @echo "  TOTAL_TIMESTEPS=2000000 just train-rgb"

@@ -76,6 +76,7 @@ MODALITY_CONFIG = {
         "image_observation": True,
         "camera": "topdown",
         "image_size": 96,
+        "stack_size": 3,
     },
     "rgb": {
         "description": "RGB Camera (96x96)",
@@ -83,6 +84,7 @@ MODALITY_CONFIG = {
         "image_observation": True,
         "camera": "rgb",
         "image_size": 96,
+        "stack_size": 3,
     },
 }
 
@@ -162,11 +164,12 @@ class GymToGymnasiumWrapper(Env):
                 self.modality, MODALITY_CONFIG["sparse_lidar"]
             )
             if is_observation and modality_config.get("image_observation", False):
-                # For image-based modalities, construct the proper image shape (H, W, C)
+                # For image-based modalities, construct the proper image shape (C, H, W)
+                # with frame stacking: channels = 3 * stack_size
                 image_size = modality_config.get("image_size", 128)
-                # RGB and BEV images are 3-channel
-                num_channels = 3
-                new_shape = (image_size, image_size, num_channels)
+                stack_size = modality_config.get("stack_size", 1)
+                num_channels = 3 * stack_size  # RGB * stack_size
+                new_shape = (num_channels, image_size, image_size)
 
                 # Reconstruct bounds for the image tensor
                 low = np.zeros(new_shape, dtype=np.float32)
@@ -197,11 +200,14 @@ class GymToGymnasiumWrapper(Env):
 
         # Handle Dict observations from image modalities
         if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
-            # OPTIMIZED: Chain operations to minimize array copies
-            # Original: 3-4 copies. Optimized: 1 copy
-            obs = np.ascontiguousarray(
-                np.transpose(obs["image"][..., 0].astype(np.float32), (2, 0, 1))
-            )
+            # Process stacked frames: (H, W, C, stack_size) -> (C*stack_size, H, W)
+            # MetaDrive returns shape like (96, 96, 3, 3) for 3 stacked RGB frames
+            image = obs["image"].astype(np.float32)  # Shape: (H, W, C, stack_size)
+            h, w, c, stack_size = image.shape
+            # Reshape to (stack_size, C, H, W) then flatten to (C*stack_size, H, W)
+            image = np.transpose(image, (3, 2, 0, 1))  # (stack_size, C, H, W)
+            image = image.reshape(c * stack_size, h, w)  # (C*stack_size, H, W)
+            obs = np.ascontiguousarray(image)
         else:
             # Existing behavior for LiDAR modalities
             obs = obs.astype(np.float32)
@@ -219,10 +225,13 @@ class GymToGymnasiumWrapper(Env):
 
         # Handle Dict observations from image modalities
         if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
-            # OPTIMIZED: Chain operations to minimize array copies (same as reset)
-            obs = np.ascontiguousarray(
-                np.transpose(obs["image"][..., 0].astype(np.float32), (2, 0, 1))
-            )
+            # Process stacked frames: (H, W, C, stack_size) -> (C*stack_size, H, W)
+            image = obs["image"].astype(np.float32)  # Shape: (H, W, C, stack_size)
+            h, w, c, stack_size = image.shape
+            # Reshape to (stack_size, C, H, W) then flatten to (C*stack_size, H, W)
+            image = np.transpose(image, (3, 2, 0, 1))  # (stack_size, C, H, W)
+            image = image.reshape(c * stack_size, h, w)  # (C*stack_size, H, W)
+            obs = np.ascontiguousarray(image)
         else:
             # Existing behavior for LiDAR modalities
             obs = obs.astype(np.float32)
@@ -528,9 +537,14 @@ def train_sac_agent(
     # Adjust buffer size for image modalities to avoid excessive memory usage
     if modality_config.get("image_observation", False):
         if buffer_size == 1_000_000:  # Only if using default buffer size
-            buffer_size = 25_000
+            stack_size = modality_config.get("stack_size", 1)
+            # Calculate buffer size to maintain similar memory usage
+            # Original: 25,000 * 27,648 values = 691M values total
+            # With stacking: need to divide by stack_size to keep similar memory
+            buffer_size = 25_000 // stack_size
             print(
-                f"[*] Reducing buffer size to {buffer_size} for image modality '{modality}' (conservative memory usage)"
+                f"[*] Buffer size adjusted to {buffer_size} for image modality '{modality}' "
+                f"(stack_size={stack_size}, memory-optimized)"
             )
 
     save_dir = Path(save_dir) / modality
