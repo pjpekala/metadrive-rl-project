@@ -656,9 +656,16 @@ def train_sac_agent(
     print("=" * 70)
 
     print("\nCreating training environment...")
-    env = create_metadrive_env(modality, is_eval=False)
+    print(f"Creating {n_envs} parallel environments...")
 
-    print("\nEnvironment created successfully!")
+    # Use make_vec_env to create parallel environments
+    env = make_vec_env(
+        lambda: create_metadrive_env(modality, is_eval=False),
+        n_envs=n_envs,
+        vec_env_cls=DummyVecEnv,  # Use DummyVecEnv for better compatibility with MetaDrive
+    )
+
+    print(f"\nEnvironment created successfully with {n_envs} parallel workers!")
     print(f"Observation space: {env.observation_space}")
     print(f"Action space: {env.action_space}")
 
@@ -702,7 +709,7 @@ def train_sac_agent(
             tau=0.005,
             gamma=0.99,
             train_freq=1,
-            gradient_steps=2,
+            gradient_steps=1,
             ent_coef="auto",
             verbose=1,
             tensorboard_log=str(log_dir),
