@@ -389,14 +389,14 @@ class MixedPrecisionCallback(BaseCallback):
 
         # Enable autocast for the model's train method
         self.enabled = True
-        self.scaler = torch.cuda.amp.GradScaler()
+        self.scaler = torch.amp.GradScaler("cuda")
 
         # Store original train method and replace with AMP-wrapped version
         if hasattr(self.model, "train"):
             self._original_train = self.model.train
 
             def amp_train(*args, **kwargs):
-                with torch.amp.autocast("cuda", enabled=True):
+                with torch.amp.autocast("cuda"):
                     return self._original_train(*args, **kwargs)
 
             self.model.train = amp_train
@@ -715,22 +715,24 @@ def train_sac_agent(
         if torch.cuda.is_available():
             try:
                 print("[*] Compiling model with torch.compile...")
-                # Compile the policy network (actor)
+                # Compile the policy network (actor) - disable CUDA graphs for RL compatibility
                 if hasattr(model, "policy") and model.policy is not None:
                     model.policy = torch.compile(
                         model.policy,
-                        mode="reduce-overhead",
+                        mode="default",
                         fullgraph=False,
                         dynamic=True,
+                        options={"triton.cudagraphs": False},
                     )
                     print("[+] Policy network compiled successfully")
                 # Compile critic networks
                 if hasattr(model, "critic") and model.critic is not None:
                     model.critic = torch.compile(
                         model.critic,
-                        mode="reduce-overhead",
+                        mode="default",
                         fullgraph=False,
                         dynamic=True,
+                        options={"triton.cudagraphs": False},
                     )
                     print("[+] Critic network compiled successfully")
             except Exception as e:
