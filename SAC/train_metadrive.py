@@ -611,7 +611,7 @@ def train_sac_agent(
     n_envs: int = 8,
     save_dir: str = "./models",
     save_freq: int = 200_000,
-    device: str = "cuda",
+    device: str = "auto",
     mixed_precision: bool = False,
     compile_model: bool = False,
 ):
@@ -767,9 +767,11 @@ def train_sac_agent(
                 initial_timesteps=start_timesteps,
                 verbose=1,
             ),
-            MixedPrecisionCallback(enabled=mixed_precision, verbose=1),
         ]
     )
+
+    if mixed_precision:
+        callbacks.append(MixedPrecisionCallback(enabled=True, verbose=1))
 
     save_model_called = False
 
