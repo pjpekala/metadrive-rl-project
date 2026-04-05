@@ -662,7 +662,7 @@ def train_sac_agent(
     env = make_vec_env(
         lambda: create_metadrive_env(modality, is_eval=False),
         n_envs=n_envs,
-        vec_env_cls=DummyVecEnv,  # Use DummyVecEnv for better compatibility with MetaDrive
+        vec_env_cls=SubprocVecEnv,  # Use SubprocVecEnv for process isolation
     )
 
     print(f"\nEnvironment created successfully with {n_envs} parallel workers!")
