@@ -715,7 +715,6 @@ def train_sac_agent(
             tensorboard_log=str(log_dir),
             device=device,
             policy_kwargs=policy_kwargs,
-            optimize_memory_usage=True,
         )
 
     # Compile model with torch.compile for optimized execution
