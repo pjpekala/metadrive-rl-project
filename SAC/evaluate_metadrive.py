@@ -64,8 +64,23 @@ def evaluate_model(
     save_video: bool = False,
     video_dir: str = "./videos",
 ) -> dict:
+    """
+    Evaluate a trained SAC model on held-out MetaDrive scenarios.
+
+    Args:
+        model_path: Path to the trained model (.zip file)
+        modality: Sensor modality (must match the trained model)
+        num_episodes: Number of evaluation episodes
+        render: Whether to render the environment
+        save_video: Whether to save evaluation videos
+        video_dir: Directory to save videos
+
+    Returns:
+        Dictionary with evaluation results
+    """
     modality_config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["sparse_lidar"])
     policy_type = modality_config["policy"]
+    is_vision_modality = modality_config.get("image_observation", False)
 
     print("=" * 70)
     print(f"MetaDrive Evaluation - {modality_config['description']}")
@@ -79,6 +94,14 @@ def evaluate_model(
     print("=" * 70)
 
     env = create_metadrive_env(modality, is_eval=True, render=render)
+
+    # For vision models, we need to import the custom feature extractor
+    # so that SAC.load() can find the class
+    if is_vision_modality:
+        from custom_feature_extractor import CombinedImageStateFeaturesExtractor
+
+        print(f"[*] Using CombinedImageStateFeaturesExtractor for vision model")
+
     model = SAC.load(model_path, env=env)
     print(f"[+] Model loaded from: {model_path}")
     print(f"[+] Observation space: {env.observation_space}")
@@ -99,6 +122,7 @@ def evaluate_model(
         video_dir.mkdir(parents=True, exist_ok=True)
         try:
             import imageio
+
             video_path = video_dir / f"eval_{Path(model_path).stem}.mp4"
             video_writer = imageio.get_writer(str(video_path))
             print(f"[+] Video will be saved to: {video_path}")
@@ -147,7 +171,13 @@ def evaluate_model(
         episode_out_of_road.append(float(out_of_road))
         episode_speeds.append(avg_speed)
 
-        status = "SUCCESS" if success else ("CRASH" if collision else ("OUT_OF_ROAD" if out_of_road else "TIMEOUT"))
+        status = (
+            "SUCCESS"
+            if success
+            else (
+                "CRASH" if collision else ("OUT_OF_ROAD" if out_of_road else "TIMEOUT")
+            )
+        )
         print(f"{status} | Reward: {episode_reward:.2f} | Length: {episode_length}")
 
     if save_video and video_writer is not None:
@@ -173,11 +203,15 @@ def evaluate_model(
     print("\n" + "=" * 70)
     print("EVALUATION RESULTS")
     print("=" * 70)
-    print(f"Success Rate:       {results['success_rate']*100:.1f}%")
-    print(f"Collision Rate:     {results['collision_rate']*100:.1f}%")
-    print(f"Out-of-Road Rate:   {results['out_of_road_rate']*100:.1f}%")
-    print(f"Mean Reward:       {results['mean_reward']:.2f} +/- {results['std_reward']:.2f}")
-    print(f"Mean Episode Len:   {results['mean_episode_length']:.1f} +/- {results['std_episode_length']:.1f}")
+    print(f"Success Rate:       {results['success_rate'] * 100:.1f}%")
+    print(f"Collision Rate:     {results['collision_rate'] * 100:.1f}%")
+    print(f"Out-of-Road Rate:   {results['out_of_road_rate'] * 100:.1f}%")
+    print(
+        f"Mean Reward:       {results['mean_reward']:.2f} +/- {results['std_reward']:.2f}"
+    )
+    print(
+        f"Mean Episode Len:   {results['mean_episode_length']:.1f} +/- {results['std_episode_length']:.1f}"
+    )
     print(f"Mean Speed:        {results['mean_speed']:.2f}")
     print("=" * 70)
 
@@ -266,4 +300,3 @@ if __name__ == "__main__":
 
     if args.save_csv:
         save_results(results)
- 

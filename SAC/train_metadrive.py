@@ -72,21 +72,37 @@ MODALITY_CONFIG = {
         "image_observation": False,
     },
     "bev": {
-        "description": "Semantic BEV (96x96)",
-        "policy": "CnnPolicy",
+        "description": "Semantic BEV (128x128) + State Vector",
+        "policy": "MultiInputPolicy",  # For Dict observations
         "image_observation": True,
+        "use_state": True,  # Include state vector for velocity/steering info
         "camera": "topdown",
-        "image_size": 96,
-        "stack_size": 3,
+        "image_size": 128,  # Increased from 96 for better spatial detail
+        "stack_size": 1,  # No frame stacking - state provides temporal info
     },
     "rgb": {
-        "description": "RGB Camera (96x96)",
-        "policy": "CnnPolicy",
+        "description": "RGB Camera (128x128) + State Vector",
+        "policy": "MultiInputPolicy",  # For Dict observations
         "image_observation": True,
+        "use_state": True,  # Include state vector for velocity/steering info
         "camera": "rgb",
-        "image_size": 96,
-        "stack_size": 3,
+        "image_size": 128,  # Increased from 96 for better spatial detail
+        "stack_size": 1,  # No frame stacking - state provides temporal info
     },
+}
+
+# Vision-specific hyperparameters (optimized for image + state observations)
+VISION_HYPERPARAMS = {
+    "learning_rate": 3e-4,
+    "batch_size": 256,
+    "buffer_size": 150_000,  # Reduced from 1M for memory efficiency
+    "learning_starts": 10_000,  # More exploration before training
+    "gradient_steps": 1,
+    "tau": 0.005,
+    "gamma": 0.99,
+    "train_freq": 1,
+    "ent_coef": "auto",
+    "target_entropy": "auto",
 }
 
 TRAIN_SEED_START = 0
@@ -112,11 +128,29 @@ import numpy as np
 
 
 class GymToGymnasiumWrapper(Env):
+    """
+    Wrapper to convert MetaDrive environment to Gymnasium-compatible format.
+
+    For image-based modalities (rgb, bev), this wrapper:
+    - Converts Dict observations to proper format for MultiInputPolicy
+    - Processes images to channel-first format (C, H, W)
+    - Normalizes image values to [0, 1]
+    - Preserves the state vector for velocity/steering information
+
+    For LiDAR modalities, this wrapper:
+    - Converts observations to float32
+    """
+
     metadata = {"render_modes": []}
 
     def __init__(self, env, modality: str):
         self.env = env
         self.modality = modality
+        self.modality_config = MODALITY_CONFIG.get(
+            modality, MODALITY_CONFIG["sparse_lidar"]
+        )
+        self.use_state = self.modality_config.get("use_state", False)
+
         self.observation_space = self._convert_space(
             env.observation_space, is_observation=True
         )
@@ -124,30 +158,44 @@ class GymToGymnasiumWrapper(Env):
         self._max_episode_steps = 2000
 
     def _convert_space(self, space, is_observation: bool = True):
+        """Convert observation/action space to Gymnasium-compatible format."""
         if isinstance(space, spaces.Dict):
             # Handle Dict observation spaces from MetaDrive
             if is_observation and self.modality in ["rgb", "bev"]:
-                # Image-based observation: Dict with 'image' and 'state' keys
-                # Extract the image space from the dict
-                image_space = space["image"]  # This is a Box space
+                modality_config = self.modality_config
+                image_size = modality_config.get("image_size", 128)
+                use_state = modality_config.get("use_state", True)
 
-                # MetaDrive returns images with shape (H, W, C, stack_size)
-                # e.g., (96, 96, 3, 3) - height, width, channels, frame_stack
-                if len(image_space.shape) == 4:
-                    h, w, c, stack_size = image_space.shape
+                # Create image space: (C, H, W) channel-first format
+                # Single frame (no stacking) with 3 RGB channels
+                image_space = spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(3, image_size, image_size),
+                    dtype=np.float32,
+                )
+
+                if use_state and "state" in space.spaces:
+                    # Create Dict observation space with both image and state
+                    state_space = space.spaces["state"]
+                    state_dim = (
+                        state_space.shape[0] if len(state_space.shape) > 0 else 1
+                    )
+
+                    return spaces.Dict(
+                        {
+                            "image": image_space,
+                            "state": spaces.Box(
+                                low=-np.inf,
+                                high=np.inf,
+                                shape=(state_dim,),
+                                dtype=np.float32,
+                            ),
+                        }
+                    )
                 else:
-                    # Fallback: if stack_size not in space, get it from config
-                    h, w, c = image_space.shape
-                    modality_config = MODALITY_CONFIG.get(self.modality, {})
-                    stack_size = modality_config.get("stack_size", 1)
-
-                # Create observation space for channel-first format with frame stacking: (C*stack_size, H, W)
-                # Flatten temporal dimension into channels
-                new_shape = (c * stack_size, h, w)
-                low = np.zeros(new_shape, dtype=np.float32)
-                high = np.ones(new_shape, dtype=np.float32)
-
-                return spaces.Box(low=low, high=high, shape=new_shape, dtype=np.float32)
+                    # Image-only observation (fallback)
+                    return image_space
             else:
                 # Non-image Dict observations: convert recursively
                 return spaces.Dict(
@@ -166,24 +214,6 @@ class GymToGymnasiumWrapper(Env):
                 else None
             )
 
-            # Only apply image transformation to observation spaces of image-based modalities
-            modality_config = MODALITY_CONFIG.get(
-                self.modality, MODALITY_CONFIG["sparse_lidar"]
-            )
-            if is_observation and modality_config.get("image_observation", False):
-                # For image-based modalities, construct the proper image shape (C, H, W)
-                # with frame stacking: channels = 3 * stack_size
-                image_size = modality_config.get("image_size", 128)
-                stack_size = modality_config.get("stack_size", 1)
-                num_channels = 3 * stack_size  # RGB * stack_size
-                new_shape = (num_channels, image_size, image_size)
-
-                # Reconstruct bounds for the image tensor
-                low = np.zeros(new_shape, dtype=np.float32)
-                high = np.ones(new_shape, dtype=np.float32)
-
-                return spaces.Box(low=low, high=high, shape=new_shape, dtype=np.float32)
-
             # For non-image observations or action spaces, use the original shape
             return spaces.Box(low=low, high=high, shape=space.shape, dtype=np.float32)
         elif isinstance(space, spaces.Discrete):
@@ -197,6 +227,41 @@ class GymToGymnasiumWrapper(Env):
             )
         return space
 
+    def _process_image_observation(self, obs: dict) -> dict:
+        """
+        Process image observation from MetaDrive format to network input format.
+
+        MetaDrive returns: {"image": (H, W, C) or (H, W, C, stack), "state": (state_dim,)}
+        We convert to: {"image": (C, H, W) normalized [0,1], "state": (state_dim,)}
+        """
+        image = obs["image"]
+
+        # Handle potential frame stacking from MetaDrive (if stack_size > 1)
+        if len(image.shape) == 4:
+            # Shape: (H, W, C, stack_size) - take only the most recent frame
+            image = image[:, :, :, -1]  # (H, W, C)
+
+        # Convert to channel-first format: (H, W, C) -> (C, H, W)
+        image = np.transpose(image, (2, 0, 1))  # (C, H, W)
+
+        # Normalize to [0, 1] if needed (MetaDrive may return 0-255 uint8)
+        if image.max() > 1.0:
+            image = image.astype(np.float32) / 255.0
+        else:
+            image = image.astype(np.float32)
+
+        # Ensure contiguous memory layout
+        image = np.ascontiguousarray(image)
+
+        # Process state vector
+        result = {"image": image}
+
+        if self.use_state and "state" in obs:
+            state = obs["state"].astype(np.float32)
+            result["state"] = state
+
+        return result
+
     def reset(self, seed=None, options=None):
         result = self.env.reset(seed=seed)
         if isinstance(result, tuple):
@@ -207,17 +272,11 @@ class GymToGymnasiumWrapper(Env):
 
         # Handle Dict observations from image modalities
         if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
-            # Process stacked frames: (H, W, C, stack_size) -> (C*stack_size, H, W)
-            # MetaDrive returns shape like (96, 96, 3, 3) for 3 stacked RGB frames
-            image = obs["image"].astype(np.float32)  # Shape: (H, W, C, stack_size)
-            h, w, c, stack_size = image.shape
-            # Reshape to (stack_size, C, H, W) then flatten to (C*stack_size, H, W)
-            image = np.transpose(image, (3, 2, 0, 1))  # (stack_size, C, H, W)
-            image = image.reshape(c * stack_size, h, w)  # (C*stack_size, H, W)
-            obs = np.ascontiguousarray(image)
+            obs = self._process_image_observation(obs)
         else:
             # Existing behavior for LiDAR modalities
-            obs = obs.astype(np.float32)
+            if hasattr(obs, "astype"):
+                obs = obs.astype(np.float32)
 
         return obs, info
 
@@ -232,16 +291,11 @@ class GymToGymnasiumWrapper(Env):
 
         # Handle Dict observations from image modalities
         if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
-            # Process stacked frames: (H, W, C, stack_size) -> (C*stack_size, H, W)
-            image = obs["image"].astype(np.float32)  # Shape: (H, W, C, stack_size)
-            h, w, c, stack_size = image.shape
-            # Reshape to (stack_size, C, H, W) then flatten to (C*stack_size, H, W)
-            image = np.transpose(image, (3, 2, 0, 1))  # (stack_size, C, H, W)
-            image = image.reshape(c * stack_size, h, w)  # (C*stack_size, H, W)
-            obs = np.ascontiguousarray(image)
+            obs = self._process_image_observation(obs)
         else:
             # Existing behavior for LiDAR modalities
-            obs = obs.astype(np.float32)
+            if hasattr(obs, "astype"):
+                obs = obs.astype(np.float32)
 
         return obs, reward, terminated, truncated, info
 
@@ -262,6 +316,17 @@ class MetaDriveEnvWrapper(MetaDriveEnv):
 def get_env_config(
     modality: str, is_eval: bool = False, render: bool = False
 ) -> dict[str, Any]:
+    """
+    Get environment configuration for the specified modality.
+
+    Args:
+        modality: One of "sparse_lidar", "dense_lidar", "bev", "rgb"
+        is_eval: If True, use evaluation seeds (800-999), else training seeds (0-799)
+        render: If True, enable rendering
+
+    Returns:
+        Dictionary of MetaDrive environment configuration
+    """
     config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["sparse_lidar"])
 
     if is_eval:
@@ -295,21 +360,25 @@ def get_env_config(
         env_config["image_observation"] = True
 
         camera_type = config["camera"]
-        stack_size = config.get("stack_size", 1)
+        image_size = config.get("image_size", 128)  # Use configured image size
+        stack_size = config.get("stack_size", 1)  # Default to no stacking
 
         # Register the camera sensor with MetaDrive
         # IMPORTANT: Sensor name MUST match the image_source name!
         if camera_type == "rgb":
-            env_config["sensors"] = {"rgb": (RGBCamera, 96, 96)}
+            env_config["sensors"] = {"rgb": (RGBCamera, image_size, image_size)}
         elif camera_type == "topdown":
-            env_config["sensors"] = {"topdown": (SemanticCamera, 96, 96)}
+            env_config["sensors"] = {
+                "topdown": (SemanticCamera, image_size, image_size)
+            }
 
         # Map vehicle config to image source
         env_config["vehicle_config"] = dict(
             image_source=camera_type,
         )
 
-        # Configure frame stacking - MetaDrive uses ImageObservation which respects stack_size
+        # Configure frame stacking
+        # stack_size=1 means no stacking (single frame)
         env_config["stack_size"] = stack_size
     else:
         env_config["vehicle_config"] = dict(
@@ -615,21 +684,54 @@ def train_sac_agent(
     mixed_precision: bool = False,
     compile_model: bool = False,
 ):
+    """
+    Train a SAC agent on MetaDrive with the specified modality.
+
+    For image-based modalities (bev, rgb), this function:
+    - Uses the CombinedImageStateFeaturesExtractor for processing Dict observations
+    - Applies vision-specific hyperparameters (lower learning rate, smaller buffer)
+    - Configures MultiInputPolicy for handling image + state observations
+
+    Args:
+        modality: Sensor modality ("sparse_lidar", "dense_lidar", "bev", "rgb")
+        total_timesteps: Total training timesteps
+        learning_rate: Learning rate for Adam optimizer
+        buffer_size: Replay buffer size
+        learning_starts: Number of steps before training starts
+        batch_size: Batch size for training
+        n_envs: Number of parallel environments
+        save_dir: Directory to save models and logs
+        save_freq: Checkpoint save frequency (in timesteps)
+        device: Training device ("auto", "cuda", "cpu")
+        mixed_precision: Enable automatic mixed precision training
+        compile_model: Enable torch.compile optimization
+    """
     modality_config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["sparse_lidar"])
     policy_type = modality_config["policy"]
+    is_vision_modality = modality_config.get("image_observation", False)
 
-    # Adjust buffer size for image modalities to avoid excessive memory usage
-    if modality_config.get("image_observation", False):
-        if buffer_size == 1_000_000:  # Only if using default buffer size
-            stack_size = modality_config.get("stack_size", 1)
-            # Calculate buffer size to maintain similar memory usage
-            # Original: 25,000 * 27,648 values = 691M values total
-            # With stacking: need to divide by stack_size to keep similar memory
-            buffer_size = 25_000 // stack_size
-            print(
-                f"[*] Buffer size adjusted to {buffer_size} for image modality '{modality}' "
-                f"(stack_size={stack_size}, memory-optimized)"
-            )
+    # Apply vision-specific hyperparameters for image modalities
+    if is_vision_modality:
+        # Use VISION_HYPERPARAMS for image-based modalities
+        if buffer_size == 1_000_000:  # Only override if using default
+            buffer_size = VISION_HYPERPARAMS["buffer_size"]
+        if learning_starts == 1000:  # Only override if using default
+            learning_starts = VISION_HYPERPARAMS["learning_starts"]
+        if batch_size == 512:  # Only override if using default
+            batch_size = VISION_HYPERPARAMS["batch_size"]
+        if learning_rate == 3e-4:  # Only override if using default
+            learning_rate = VISION_HYPERPARAMS["learning_rate"]
+
+        # Reduce parallel environments for memory efficiency
+        if n_envs == 8:  # Only override if using default
+            n_envs = 6
+
+        print(f"[*] Using vision-optimized hyperparameters for '{modality}':")
+        print(f"    buffer_size: {buffer_size:,}")
+        print(f"    learning_starts: {learning_starts:,}")
+        print(f"    batch_size: {batch_size}")
+        print(f"    learning_rate: {learning_rate}")
+        print(f"    n_envs: {n_envs}")
 
     save_dir = Path(save_dir) / modality
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -693,11 +795,27 @@ def train_sac_agent(
     if not model_loaded:
         print("[>] Initializing new SAC model...")
 
-        # For image-based policies, we need to set normalize_images=False
-        # since our images are already in the range [0, 1] and channel-first format
+        # Configure policy_kwargs based on modality
         policy_kwargs = {}
-        if modality_config.get("image_observation", False):
-            policy_kwargs["normalize_images"] = False
+
+        if is_vision_modality:
+            # Import custom feature extractor
+            from custom_feature_extractor import CombinedImageStateFeaturesExtractor
+
+            # Use custom feature extractor for image + state observations
+            policy_kwargs = {
+                "features_extractor_class": CombinedImageStateFeaturesExtractor,
+                "features_extractor_kwargs": {
+                    "features_dim": 512,
+                    "cnn_output_dim": 512,
+                    "state_output_dim": 128,
+                },
+                "normalize_images": False,  # Images already normalized in wrapper
+            }
+            print("[*] Using CombinedImageStateFeaturesExtractor for Dict observations")
+        else:
+            # LiDAR modalities use default MlpPolicy without special configuration
+            pass
 
         model = SAC(
             policy_type,
@@ -706,11 +824,13 @@ def train_sac_agent(
             buffer_size=buffer_size,
             learning_starts=learning_starts,
             batch_size=batch_size,
-            tau=0.005,
-            gamma=0.99,
-            train_freq=1,
-            gradient_steps=1,
-            ent_coef="auto",
+            tau=VISION_HYPERPARAMS["tau"] if is_vision_modality else 0.005,
+            gamma=VISION_HYPERPARAMS["gamma"] if is_vision_modality else 0.99,
+            train_freq=VISION_HYPERPARAMS["train_freq"] if is_vision_modality else 1,
+            gradient_steps=VISION_HYPERPARAMS["gradient_steps"]
+            if is_vision_modality
+            else 1,
+            ent_coef=VISION_HYPERPARAMS["ent_coef"] if is_vision_modality else "auto",
             verbose=1,
             tensorboard_log=str(log_dir),
             device=device,
