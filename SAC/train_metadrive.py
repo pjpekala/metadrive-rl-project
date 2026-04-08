@@ -697,6 +697,8 @@ def train_sac_agent(
     buffer_size: int = 1_000_000,
     learning_starts: int = 1000,
     batch_size: int = 512,
+    train_freq: int = 1,
+    gradient_steps: int = 1,
     n_envs: int = 8,
     save_dir: str = "./models",
     save_freq: int = 200_000,
@@ -709,6 +711,7 @@ def train_sac_agent(
     is_image_modality = modality_config.get("image_observation", False)
 
     # Adjust hyperparameters for image modalities to improve GPU utilization
+    # Only auto-adjust if using default values (allows CLI override)
     if is_image_modality:
         if buffer_size == 1_000_000:  # Only if using default buffer size
             # Use 100k buffer for image modalities (good balance of memory vs diversity)
@@ -718,19 +721,21 @@ def train_sac_agent(
             )
         if batch_size == 512:  # Only if using default batch size
             # Larger batches improve GPU utilization for CNN policies
-            batch_size = 1024
+            batch_size = 2048  # Increased from 1024 for better GPU utilization
             print(
                 f"[*] Batch size adjusted to {batch_size} for image modality '{modality}'"
             )
-
-    # For image modalities, use higher train_freq and gradient_steps
-    # This reduces environment step overhead and improves GPU utilization
-    train_freq = 4 if is_image_modality else 1
-    gradient_steps = 4 if is_image_modality else 1
-    if is_image_modality:
-        print(
-            f"[*] Using train_freq={train_freq}, gradient_steps={gradient_steps} for better GPU utilization"
-        )
+        if train_freq == 1:  # Only if using default train_freq
+            train_freq = 4
+            print(
+                f"[*] Train freq adjusted to {train_freq} for image modality '{modality}'"
+            )
+        if gradient_steps == 1:  # Only if using default gradient_steps
+            # More gradient steps per training call improves GPU utilization
+            gradient_steps = 8  # Increased from 4 for better GPU utilization
+            print(
+                f"[*] Gradient steps adjusted to {gradient_steps} for image modality '{modality}'"
+            )
 
     save_dir = Path(save_dir) / modality
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -969,6 +974,30 @@ if __name__ == "__main__":
         help="Device for training",
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=512,
+        help="Batch size for training (default: 512, auto-adjusted to 2048 for image modalities)",
+    )
+    parser.add_argument(
+        "--buffer-size",
+        type=int,
+        default=1_000_000,
+        help="Replay buffer size (default: 1M, auto-adjusted to 100k for image modalities)",
+    )
+    parser.add_argument(
+        "--train-freq",
+        type=int,
+        default=1,
+        help="Number of env steps between training calls (default: 1, auto-adjusted to 4 for image modalities)",
+    )
+    parser.add_argument(
+        "--gradient-steps",
+        type=int,
+        default=1,
+        help="Number of gradient steps per training call (default: 1, auto-adjusted to 8 for image modalities)",
+    )
+    parser.add_argument(
         "--mixed-precision",
         action="store_true",
         default=False,
@@ -986,6 +1015,10 @@ if __name__ == "__main__":
     train_sac_agent(
         modality=args.modality,
         total_timesteps=args.total_timesteps,
+        batch_size=args.batch_size,
+        buffer_size=args.buffer_size,
+        train_freq=args.train_freq,
+        gradient_steps=args.gradient_steps,
         n_envs=args.n_envs,
         device=args.device,
         mixed_precision=args.mixed_precision,
