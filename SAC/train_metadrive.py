@@ -6,6 +6,7 @@ Features:
 - Interrupt-safe training with auto-resume
 - Append-style CSV logging for experiment continuity
 - TensorBoard + CSV logging
+- Headless server support (RunPod, etc.) with proper rendering configuration
 
 Installation:
     pip install metadrive-simulator stable-baselines3[extra] tensorboard imageio imageio-ffmpeg
@@ -17,11 +18,11 @@ Usage:
     # Train Dense LiDAR
     python train_metadrive.py --modality dense_lidar --total-timesteps 1_000_000
 
-    # Train Semantic BEV (CNN)
-    python train_metadrive.py --modality bev --total-timesteps 1_000_000
+    # Train Semantic BEV (CNN) - use run_training.sh for headless servers
+    ./run_training.sh train_metadrive.py --modality bev --total-timesteps 1_000_000
 
-    # Train RGB Camera (CNN)
-    python train_metadrive.py --modality rgb --total-timesteps 1_000_000
+    # Train RGB Camera (CNN) - use run_training.sh for headless servers
+    ./run_training.sh train_metadrive.py --modality rgb --total-timesteps 1_000_000
 
     # Resume interrupted training
     python train_metadrive.py --modality sparse_lidar
@@ -30,7 +31,92 @@ Usage:
     python evaluate_metadrive.py --model-path ./models/sparse_lidar/sac_metadrive_final.zip --modality sparse_lidar --render
 """
 
+# =============================================================================
+# HEADLESS RENDERING CONFIGURATION (must be BEFORE other imports)
+# =============================================================================
+# On headless servers (RunPod, etc.), we need to configure Panda3D to work
+# without a physical display and handle OpenGL context limitations gracefully.
+# =============================================================================
+
 import os
+
+# Set environment variables for headless rendering
+os.environ.setdefault("PANDA_PRC_DIR", "")
+os.environ.setdefault("NVIDIA_DRIVER_CAPABILITIES", "all")
+os.environ.setdefault("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+
+from panda3d.core import loadPrcFileData
+
+# Core rendering settings for headless servers
+# CRITICAL: Use EGL (p3headlessgl) instead of GLX for GPU-accelerated headless rendering
+# GLX with Xvfb falls back to software rendering (llvmpipe) which is extremely slow
+loadPrcFileData("", "load-display p3headlessgl")  # Use EGL for hardware acceleration
+loadPrcFileData("", "notify-level-device error")  # Suppress /dev/input errors
+loadPrcFileData("", "audio-library-name null")  # Disable audio
+loadPrcFileData("", "gl-version 3 2")  # Use OpenGL 3.2 core profile
+loadPrcFileData("", "framebuffer-srgb false")  # Disable sRGB (simpler rendering)
+
+# =============================================================================
+# SIMPLEPBR HEADLESS PATCH
+# =============================================================================
+# On headless servers, simplepbr's tonemapping setup can fail because the OpenGL
+# context doesn't support certain features. This patch makes it fail gracefully.
+# MetaDrive bundles its own simplepbr at metadrive.third_party.simplepbr
+# =============================================================================
+
+_headless_patches_applied = False
+
+
+def _apply_headless_patches() -> None:
+    """Apply patches for headless rendering compatibility.
+
+    This function patches simplepbr.Pipeline.__init__ to gracefully handle
+    failures in _setup_tonemapping() which can occur on headless servers
+    when the OpenGL context doesn't support certain features.
+
+    This must be called in each subprocess before creating MetaDrive environments.
+    """
+    global _headless_patches_applied
+
+    if _headless_patches_applied:
+        return
+
+    try:
+        # MetaDrive uses its own bundled simplepbr, not the standard package
+        from metadrive.third_party import simplepbr
+
+        original_init = simplepbr.Pipeline.__init__
+
+        def patched_init(self, *args, **kwargs):
+            try:
+                original_init(self, *args, **kwargs)
+            except AttributeError as e:
+                if "set_shader" in str(e):
+                    # Tonemapping setup failed - this is expected on headless servers
+                    # Initialize minimal state to prevent crashes
+                    print("[!] simplepbr tonemapping disabled (headless mode)")
+                    self.use_330 = False
+                    self.window = None
+                    self.camera_node = None
+                    self.max_lights = 8
+                    self.enable_shadows = False
+                    self.enable_fog = False
+                    self.exposure = 1.0
+                else:
+                    raise
+
+        simplepbr.Pipeline.__init__ = patched_init
+        _headless_patches_applied = True
+
+    except ImportError:
+        # metadrive.third_party.simplepbr not available, no patching needed
+        pass
+
+
+# =============================================================================
+# END HEADLESS CONFIGURATION - Regular imports follow
+# =============================================================================
+
 import argparse
 import csv
 import time
@@ -328,6 +414,9 @@ def get_env_config(
 def create_metadrive_env(
     modality: str, is_eval: bool = False, render: bool = False
 ) -> GymToGymnasiumWrapper:
+    # Apply headless patches in each subprocess for image modalities
+    _apply_headless_patches()
+
     config = get_env_config(modality, is_eval=is_eval, render=render)
     env = MetaDriveEnvWrapper(config=config)
     return GymToGymnasiumWrapper(env, modality=modality)
@@ -617,19 +706,31 @@ def train_sac_agent(
 ):
     modality_config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["sparse_lidar"])
     policy_type = modality_config["policy"]
+    is_image_modality = modality_config.get("image_observation", False)
 
-    # Adjust buffer size for image modalities to avoid excessive memory usage
-    if modality_config.get("image_observation", False):
+    # Adjust hyperparameters for image modalities to improve GPU utilization
+    if is_image_modality:
         if buffer_size == 1_000_000:  # Only if using default buffer size
-            stack_size = modality_config.get("stack_size", 1)
-            # Calculate buffer size to maintain similar memory usage
-            # Original: 25,000 * 27,648 values = 691M values total
-            # With stacking: need to divide by stack_size to keep similar memory
-            buffer_size = 25_000 // stack_size
+            # Use 100k buffer for image modalities (good balance of memory vs diversity)
+            buffer_size = 100_000
             print(
-                f"[*] Buffer size adjusted to {buffer_size} for image modality '{modality}' "
-                f"(stack_size={stack_size}, memory-optimized)"
+                f"[*] Buffer size adjusted to {buffer_size:,} for image modality '{modality}'"
             )
+        if batch_size == 512:  # Only if using default batch size
+            # Larger batches improve GPU utilization for CNN policies
+            batch_size = 1024
+            print(
+                f"[*] Batch size adjusted to {batch_size} for image modality '{modality}'"
+            )
+
+    # For image modalities, use higher train_freq and gradient_steps
+    # This reduces environment step overhead and improves GPU utilization
+    train_freq = 4 if is_image_modality else 1
+    gradient_steps = 4 if is_image_modality else 1
+    if is_image_modality:
+        print(
+            f"[*] Using train_freq={train_freq}, gradient_steps={gradient_steps} for better GPU utilization"
+        )
 
     save_dir = Path(save_dir) / modality
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -708,14 +809,14 @@ def train_sac_agent(
             batch_size=batch_size,
             tau=0.005,
             gamma=0.99,
-            train_freq=1,
-            gradient_steps=1,
+            train_freq=train_freq,
+            gradient_steps=gradient_steps,
             ent_coef="auto",
             verbose=1,
             tensorboard_log=str(log_dir),
             device=device,
             policy_kwargs=policy_kwargs,
-            optimize_memory_usage=True,
+            optimize_memory_usage=False,
         )
 
     # Compile model with torch.compile for optimized execution
