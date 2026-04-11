@@ -159,19 +159,19 @@ MODALITY_CONFIG = {
     },
     "bev": {
         "description": "Semantic BEV (96x96)",
-        "policy": "CnnPolicy",
+        "policy": "MultiInputPolicy",
         "image_observation": True,
         "camera": "topdown",
         "image_size": 96,
-        "stack_size": 3,
+        "stack_size": 1,
     },
     "rgb": {
         "description": "RGB Camera (96x96)",
-        "policy": "CnnPolicy",
+        "policy": "MultiInputPolicy",
         "image_observation": True,
         "camera": "rgb",
         "image_size": 96,
-        "stack_size": 3,
+        "stack_size": 1,
     },
 }
 
@@ -194,7 +194,6 @@ CSV_LOG_HEADER = [
 
 
 from gymnasium import Env, spaces
-import numpy as np
 
 
 class GymToGymnasiumWrapper(Env):
@@ -213,27 +212,46 @@ class GymToGymnasiumWrapper(Env):
         if isinstance(space, spaces.Dict):
             # Handle Dict observation spaces from MetaDrive
             if is_observation and self.modality in ["rgb", "bev"]:
-                # Image-based observation: Dict with 'image' and 'state' keys
-                # Extract the image space from the dict
-                image_space = space["image"]  # This is a Box space
+                image_space = space["image"]
+                state_space = space["state"]
 
-                # MetaDrive returns images with shape (H, W, C, stack_size)
-                # e.g., (96, 96, 3, 3) - height, width, channels, frame_stack
                 if len(image_space.shape) == 4:
                     h, w, c, stack_size = image_space.shape
                 else:
-                    # Fallback: if stack_size not in space, get it from config
                     h, w, c = image_space.shape
-                    modality_config = MODALITY_CONFIG.get(self.modality, {})
-                    stack_size = modality_config.get("stack_size", 1)
+                    stack_size = 1
 
-                # Create observation space for channel-first format with frame stacking: (C*stack_size, H, W)
-                # Flatten temporal dimension into channels
-                new_shape = (c * stack_size, h, w)
-                low = np.zeros(new_shape, dtype=np.float32)
-                high = np.ones(new_shape, dtype=np.float32)
+                image_shape = (c * stack_size, h, w)
+                image_low = np.zeros(image_shape, dtype=np.float32)
+                image_high = np.ones(image_shape, dtype=np.float32)
 
-                return spaces.Box(low=low, high=high, shape=new_shape, dtype=np.float32)
+                state_low = (
+                    np.array(state_space.low, dtype=np.float32)
+                    if state_space.low is not None
+                    else None
+                )
+                state_high = (
+                    np.array(state_space.high, dtype=np.float32)
+                    if state_space.high is not None
+                    else None
+                )
+
+                return spaces.Dict(
+                    {
+                        "image": spaces.Box(
+                            low=image_low,
+                            high=image_high,
+                            shape=image_shape,
+                            dtype=np.float32,
+                        ),
+                        "state": spaces.Box(
+                            low=state_low,
+                            high=state_high,
+                            shape=state_space.shape,
+                            dtype=np.float32,
+                        ),
+                    }
+                )
             else:
                 # Non-image Dict observations: convert recursively
                 return spaces.Dict(
@@ -258,7 +276,6 @@ class GymToGymnasiumWrapper(Env):
             )
             if is_observation and modality_config.get("image_observation", False):
                 # For image-based modalities, construct the proper image shape (C, H, W)
-                # with frame stacking: channels = 3 * stack_size
                 image_size = modality_config.get("image_size", 128)
                 stack_size = modality_config.get("stack_size", 1)
                 num_channels = 3 * stack_size  # RGB * stack_size
@@ -283,6 +300,19 @@ class GymToGymnasiumWrapper(Env):
             )
         return space
 
+    @staticmethod
+    def _format_stacked_image(image: np.ndarray) -> np.ndarray:
+        image = image.astype(np.float32)
+        if len(image.shape) == 4:
+            h, w, c, stack_size = image.shape
+            image = np.transpose(image, (3, 2, 0, 1))
+            image = image.reshape(c * stack_size, h, w)
+            return np.ascontiguousarray(image)
+        if len(image.shape) == 3:
+            image = np.transpose(image, (2, 0, 1))
+            return np.ascontiguousarray(image)
+        raise ValueError(f"Unexpected image shape: {image.shape}")
+
     def reset(self, seed=None, options=None):
         result = self.env.reset(seed=seed)
         if isinstance(result, tuple):
@@ -293,14 +323,10 @@ class GymToGymnasiumWrapper(Env):
 
         # Handle Dict observations from image modalities
         if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
-            # Process stacked frames: (H, W, C, stack_size) -> (C*stack_size, H, W)
-            # MetaDrive returns shape like (96, 96, 3, 3) for 3 stacked RGB frames
-            image = obs["image"].astype(np.float32)  # Shape: (H, W, C, stack_size)
-            h, w, c, stack_size = image.shape
-            # Reshape to (stack_size, C, H, W) then flatten to (C*stack_size, H, W)
-            image = np.transpose(image, (3, 2, 0, 1))  # (stack_size, C, H, W)
-            image = image.reshape(c * stack_size, h, w)  # (C*stack_size, H, W)
-            obs = np.ascontiguousarray(image)
+            obs = {
+                "image": self._format_stacked_image(obs["image"]),
+                "state": np.asarray(obs["state"], dtype=np.float32),
+            }
         else:
             # Existing behavior for LiDAR modalities
             obs = obs.astype(np.float32)
@@ -318,13 +344,10 @@ class GymToGymnasiumWrapper(Env):
 
         # Handle Dict observations from image modalities
         if isinstance(obs, dict) and self.modality in ["rgb", "bev"]:
-            # Process stacked frames: (H, W, C, stack_size) -> (C*stack_size, H, W)
-            image = obs["image"].astype(np.float32)  # Shape: (H, W, C, stack_size)
-            h, w, c, stack_size = image.shape
-            # Reshape to (stack_size, C, H, W) then flatten to (C*stack_size, H, W)
-            image = np.transpose(image, (3, 2, 0, 1))  # (stack_size, C, H, W)
-            image = image.reshape(c * stack_size, h, w)  # (C*stack_size, H, W)
-            obs = np.ascontiguousarray(image)
+            obs = {
+                "image": self._format_stacked_image(obs["image"]),
+                "state": np.asarray(obs["state"], dtype=np.float32),
+            }
         else:
             # Existing behavior for LiDAR modalities
             obs = obs.astype(np.float32)
@@ -393,6 +416,12 @@ def get_env_config(
         # Map vehicle config to image source
         env_config["vehicle_config"] = dict(
             image_source=camera_type,
+            show_lidar=False,
+            lidar=dict(num_lasers=0, distance=0),
+            show_lane_line_detector=False,
+            lane_line_detector=dict(num_lasers=0, distance=20),
+            show_side_detector=False,
+            side_detector=dict(num_lasers=0, distance=50),
         )
 
         # Configure frame stacking - MetaDrive uses ImageObservation which respects stack_size
@@ -626,6 +655,102 @@ class AppendCSVCallback(BaseCallback):
         return True
 
 
+class InlineEvalCallback(BaseCallback):
+    def __init__(
+        self,
+        modality: str,
+        eval_freq: int = 100_000,
+        eval_episodes: int = 8,
+        verbose: int = 0,
+    ):
+        super().__init__(verbose)
+        self.modality = modality
+        self.eval_freq = eval_freq
+        self.eval_episodes = eval_episodes
+        self._last_eval_step = 0
+        self._eval_env = None
+
+    def _on_training_start(self) -> None:
+        if self.eval_freq <= 0 or self.eval_episodes <= 0:
+            return
+        self._eval_env = create_metadrive_env(self.modality, is_eval=True, render=False)
+
+    def _run_eval(self) -> dict[str, float]:
+        if self._eval_env is None:
+            return {
+                "success_rate": 0.0,
+                "collision_rate": 0.0,
+                "out_of_road_rate": 0.0,
+                "mean_reward": 0.0,
+                "mean_episode_length": 0.0,
+            }
+
+        rewards: list[float] = []
+        lengths: list[float] = []
+        successes: list[float] = []
+        collisions: list[float] = []
+        out_of_road: list[float] = []
+
+        for _ in range(self.eval_episodes):
+            obs, _ = self._eval_env.reset()
+            done = False
+            episode_reward = 0.0
+            episode_length = 0
+            info = {}
+
+            while not done:
+                action, _ = self.model.predict(obs, deterministic=True)
+                obs, reward, terminated, truncated, info = self._eval_env.step(action)
+                done = terminated or truncated
+                episode_reward += float(reward)
+                episode_length += 1
+
+            rewards.append(episode_reward)
+            lengths.append(float(episode_length))
+            successes.append(float(info.get("arrive_dest", False)))
+            collisions.append(float(info.get("crash", False)))
+            out_of_road.append(float(info.get("out_of_road", False)))
+
+        return {
+            "success_rate": float(np.mean(successes)),
+            "collision_rate": float(np.mean(collisions)),
+            "out_of_road_rate": float(np.mean(out_of_road)),
+            "mean_reward": float(np.mean(rewards)),
+            "mean_episode_length": float(np.mean(lengths)),
+        }
+
+    def _on_step(self) -> bool:
+        if self.eval_freq <= 0 or self.eval_episodes <= 0:
+            return True
+
+        current_step = self.model.num_timesteps
+        if current_step - self._last_eval_step < self.eval_freq:
+            return True
+
+        metrics = self._run_eval()
+        self.logger.record("eval/success_rate", metrics["success_rate"])
+        self.logger.record("eval/collision_rate", metrics["collision_rate"])
+        self.logger.record("eval/out_of_road_rate", metrics["out_of_road_rate"])
+        self.logger.record("eval/mean_reward", metrics["mean_reward"])
+        self.logger.record("eval/mean_episode_length", metrics["mean_episode_length"])
+        self._last_eval_step = current_step
+
+        if self.verbose > 0:
+            print(
+                "[*] Inline eval @ "
+                f"{current_step:,} steps | "
+                f"Success: {metrics['success_rate']:.3f} | "
+                f"Out-of-road: {metrics['out_of_road_rate']:.3f}"
+            )
+
+        return True
+
+    def _on_training_end(self) -> None:
+        if self._eval_env is not None:
+            self._eval_env.close()
+            self._eval_env = None
+
+
 class VisualizationCallback(BaseCallback):
     def __init__(
         self,
@@ -705,6 +830,9 @@ def train_sac_agent(
     device: str = "auto",
     mixed_precision: bool = False,
     compile_model: bool = False,
+    inline_eval: bool = True,
+    eval_freq: int = 100_000,
+    eval_episodes: int = 8,
 ):
     modality_config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["sparse_lidar"])
     policy_type = modality_config["policy"]
@@ -714,14 +842,17 @@ def train_sac_agent(
     # Only auto-adjust if using default values (allows CLI override)
     if is_image_modality:
         if buffer_size == 1_000_000:  # Only if using default buffer size
-            # Use 100k buffer for image modalities (good balance of memory vs diversity)
             buffer_size = 100_000
             print(
                 f"[*] Buffer size adjusted to {buffer_size:,} for image modality '{modality}'"
             )
+        if learning_starts == 1000:  # Only if using default learning_starts
+            learning_starts = 20_000
+            print(
+                f"[*] Learning starts adjusted to {learning_starts:,} for image modality '{modality}'"
+            )
         if batch_size == 512:  # Only if using default batch size
-            # Larger batches improve GPU utilization for CNN policies
-            batch_size = 2048  # Increased from 1024 for better GPU utilization
+            batch_size = 512
             print(
                 f"[*] Batch size adjusted to {batch_size} for image modality '{modality}'"
             )
@@ -731,8 +862,7 @@ def train_sac_agent(
                 f"[*] Train freq adjusted to {train_freq} for image modality '{modality}'"
             )
         if gradient_steps == 1:  # Only if using default gradient_steps
-            # More gradient steps per training call improves GPU utilization
-            gradient_steps = 8  # Increased from 4 for better GPU utilization
+            gradient_steps = 4
             print(
                 f"[*] Gradient steps adjusted to {gradient_steps} for image modality '{modality}'"
             )
@@ -759,6 +889,11 @@ def train_sac_agent(
         f"Training seeds: {TRAIN_SEED_START} to {TRAIN_SEED_START + TRAIN_SEED_COUNT - 1}"
     )
     print(f"Total timesteps: {total_timesteps:,}")
+    print(f"Learning starts: {learning_starts:,}")
+    print(f"Buffer size: {buffer_size:,}")
+    print(f"Batch size: {batch_size}")
+    print(f"Train freq: {train_freq}")
+    print(f"Gradient steps: {gradient_steps}")
     print("=" * 70)
 
     print("\nCreating training environment...")
@@ -874,7 +1009,7 @@ def train_sac_agent(
     callbacks.extend(
         [
             GarbageCollectionCallback(gc_freq=5000, verbose=0),
-            VisualizationCallback(modality=modality, verbose=1),
+            VisualizationCallback(modality=modality, verbose=0),
             AppendCSVCallback(
                 str(csv_log_path),
                 log_freq=4096,
@@ -883,6 +1018,16 @@ def train_sac_agent(
             ),
         ]
     )
+
+    if inline_eval:
+        callbacks.append(
+            InlineEvalCallback(
+                modality=modality,
+                eval_freq=eval_freq,
+                eval_episodes=eval_episodes,
+                verbose=1,
+            )
+        )
 
     if mixed_precision:
         callbacks.append(MixedPrecisionCallback(enabled=True, verbose=1))
@@ -961,6 +1106,12 @@ if __name__ == "__main__":
         help="Total training timesteps",
     )
     parser.add_argument(
+        "--learning-starts",
+        type=int,
+        default=1000,
+        help="Number of steps before training starts (default: 1000, auto-adjusted to 20000 for image modalities)",
+    )
+    parser.add_argument(
         "--n-envs",
         type=int,
         default=8,
@@ -995,7 +1146,25 @@ if __name__ == "__main__":
         "--gradient-steps",
         type=int,
         default=1,
-        help="Number of gradient steps per training call (default: 1, auto-adjusted to 8 for image modalities)",
+        help="Number of gradient steps per training call (default: 1, auto-adjusted to 4 for image modalities)",
+    )
+    parser.add_argument(
+        "--eval-freq",
+        type=int,
+        default=100_000,
+        help="Inline evaluation frequency in timesteps (set <=0 to disable)",
+    )
+    parser.add_argument(
+        "--eval-episodes",
+        type=int,
+        default=8,
+        help="Number of held-out episodes per inline evaluation",
+    )
+    parser.add_argument(
+        "--no-inline-eval",
+        action="store_true",
+        default=False,
+        help="Disable inline held-out evaluation during training",
     )
     parser.add_argument(
         "--mixed-precision",
@@ -1015,6 +1184,7 @@ if __name__ == "__main__":
     train_sac_agent(
         modality=args.modality,
         total_timesteps=args.total_timesteps,
+        learning_starts=args.learning_starts,
         batch_size=args.batch_size,
         buffer_size=args.buffer_size,
         train_freq=args.train_freq,
@@ -1023,4 +1193,7 @@ if __name__ == "__main__":
         device=args.device,
         mixed_precision=args.mixed_precision,
         compile_model=args.compile,
+        inline_eval=not args.no_inline_eval,
+        eval_freq=args.eval_freq,
+        eval_episodes=args.eval_episodes,
     )
