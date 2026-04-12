@@ -3,7 +3,7 @@
 
 # Default values (can be overridden)
 TOTAL_TIMESTEPS := "1000000"
-N_ENVS := "8"
+N_ENVS := "12"
 DEVICE := "cuda"
 MODELS_DIR := "./models"
 

@@ -1,0 +1,266 @@
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+[*] Buffer size adjusted to 100,000 for image modality 'rgb'
+[*] Learning starts adjusted to 10,000 for image modality 'rgb'
+[*] Batch size adjusted to 1024 for image modality 'rgb'
+[*] Train freq adjusted to 4 for image modality 'rgb'
+[*] Gradient steps adjusted to 4 for image modality 'rgb'
+[*] Parallel environments adjusted to 12 for image modality 'rgb'
+======================================================================
+MetaDrive SAC Training - RGB Camera (96x96)
+======================================================================
+Device: cuda
+Policy: MultiInputPolicy
+Parallel environments: 12
+Training seeds: 0 to 799
+Total timesteps: 1,000,000
+Learning starts: 10,000
+Buffer size: 100,000
+Batch size: 1024
+Train freq: 4
+Gradient steps: 4
+======================================================================
+
+Creating training environment...
+Creating 12 parallel environments...
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/workspace/metadrive-rl-project/.venv/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+[38;20m[INFO] Environment: MetaDriveEnvWrapper[0m
+[38;20m[INFO] MetaDrive version: 0.4.3[0m
+[38;20m[INFO] Sensors: [lidar: Lidar(), side_detector: SideDetector(), lane_line_detector: LaneLineDetector(), rgb: RGBCamera(96, 96)][0m
+[38;20m[INFO] Render Mode: offscreen[0m
+[38;20m[INFO] Horizon (Max steps per agent): 2000[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+:device(:device(:deviceerror): :device(:device(error): :device(error:device:deviceError adding inotify watch on /dev/input: No such file or directory:device(:device(:device(error): :deviceerror): Error adding inotify watch on /dev/input: No such file or directory(error): Error adding inotify watch on /dev/input: (error(error
+error): error): error): Error adding inotify watch on /dev/input: No such file or directory(errorError adding inotify watch on /dev/input: No such file or directory
+): Error adding inotify watch on /dev/input: No such file or directory
+): Error adding inotify watch on /dev/input: ): Error adding inotify watch on /dev/input: :device(Error adding inotify watch on /dev/input: No such file or directoryError adding inotify watch on /dev/input: No such file or directoryError adding inotify watch on /dev/input: No such file or directory
+): Error adding inotify watch on /dev/input: 
+:device(No such file or directory
+:device(No such file or directory
+No such file or directory
+error): 
+
+
+:device(No such file or directory
+:device(error): :device(error): :device(:device(Error opening directory /dev/input: No such file or directory:device(:device(:device(error): :device(error): Error opening directory /dev/input: No such file or directoryerror): Error opening directory /dev/input: No such file or directoryerror): error): 
+error): error): error): Error opening directory /dev/input: No such file or directoryerror): Error opening directory /dev/input: No such file or directory
+Error opening directory /dev/input: No such file or directory
+Error opening directory /dev/input: No such file or directoryError opening directory /dev/input: No such file or directoryError opening directory /dev/input: No such file or directoryError opening directory /dev/input: No such file or directoryError opening directory /dev/input: No such file or directory
+Error opening directory /dev/input: No such file or directory
+
+
+
+
+
+
+
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Assets version: 0.4.3[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Known Pipes: eglGraphicsPipe[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+[38;20m[INFO] Start Scenario Index: 0, Num Scenarios : 800[0m
+
+Environment created successfully with 12 parallel workers!
+Observation space: Dict('image': Box(0.0, 1.0, (3, 96, 96), float32), 'state': Box(-0.0, 1.0, (19,), float32))
+Action space: Box(-1.0, 1.0, (2,), float32)
+[>] Initializing new SAC model...
+Using cuda device
+[>] Training 1,000,000 remaining steps (budget 1,000,000)
+
+======================================================================
+Starting Training...
+======================================================================
+To monitor with TensorBoard: tensorboard --logdir models/rgb/logs
+======================================================================
+
+
+[!] Received signal 2, saving model...
+
+[+] Saving model and replay buffer (on exit)...
+
+[!] Received signal 2, saving model...
+[+] CSV log: models/rgb/training_log.csv

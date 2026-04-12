@@ -838,33 +838,38 @@ def train_sac_agent(
     policy_type = modality_config["policy"]
     is_image_modality = modality_config.get("image_observation", False)
 
-    # Adjust hyperparameters for image modalities to improve GPU utilization
+    # Adjust hyperparameters for image modalities based on available resources
     # Only auto-adjust if using default values (allows CLI override)
     if is_image_modality:
-        if buffer_size == 1_000_000:  # Only if using default buffer size
+        if buffer_size == 1_000_000:
             buffer_size = 100_000
             print(
                 f"[*] Buffer size adjusted to {buffer_size:,} for image modality '{modality}'"
             )
-        if learning_starts == 1000:  # Only if using default learning_starts
-            learning_starts = 20_000
+        if learning_starts == 1000:
+            learning_starts = 10_000
             print(
                 f"[*] Learning starts adjusted to {learning_starts:,} for image modality '{modality}'"
             )
-        if batch_size == 512:  # Only if using default batch size
+        if batch_size == 512:
             batch_size = 512
             print(
                 f"[*] Batch size adjusted to {batch_size} for image modality '{modality}'"
             )
-        if train_freq == 1:  # Only if using default train_freq
+        if train_freq == 1:
             train_freq = 4
             print(
                 f"[*] Train freq adjusted to {train_freq} for image modality '{modality}'"
             )
-        if gradient_steps == 1:  # Only if using default gradient_steps
+        if gradient_steps == 1:
             gradient_steps = 4
             print(
                 f"[*] Gradient steps adjusted to {gradient_steps} for image modality '{modality}'"
+            )
+        if n_envs in [8, 12]:
+            n_envs = 12
+            print(
+                f"[*] Parallel environments adjusted to {n_envs} for image modality '{modality}'"
             )
 
     save_dir = Path(save_dir) / modality
@@ -1115,7 +1120,7 @@ if __name__ == "__main__":
         "--n-envs",
         type=int,
         default=8,
-        help="Number of parallel environments",
+        help="Number of parallel environments (auto-adjusted to 12 for image modalities)",
     )
     parser.add_argument(
         "--device",
