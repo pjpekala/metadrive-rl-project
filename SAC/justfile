@@ -1,11 +1,21 @@
 # MetaDrive SAC Training - Justfile
 # Quick commands for training and evaluation using uv
+#
+# Quick examples:
+#   just train-bev
+#   IMAGE_MEMORY_BUDGET_GB=10 just train-bev --total-timesteps 500000
+#   just train-rgb --hardware runpod
+#   IMAGE_N_ENVS=1 just train-bev --no-inline-eval
+#   just eval-bev --episodes 20
+#   just eval-rgb --render --save-video
 
 # Default values (can be overridden)
 TOTAL_TIMESTEPS := "1000000"
 N_ENVS := "8"
+IMAGE_N_ENVS := "1"
 DEVICE := "cuda"
 MODELS_DIR := "./models"
+IMAGE_MEMORY_BUDGET_GB := "12"
 
 # === SETUP ===
 
@@ -41,8 +51,10 @@ train-bev *ARGS:
     uv run python train_metadrive.py \
         --modality bev \
         --total-timesteps {{ TOTAL_TIMESTEPS }} \
-        --n-envs {{ N_ENVS }} \
+        --n-envs {{ IMAGE_N_ENVS }} \
         --device {{ DEVICE }} \
+        --memory-budget-gb {{ IMAGE_MEMORY_BUDGET_GB }} \
+        --no-inline-eval \
         {{ ARGS }}
 
 # Train RGB Camera model
@@ -50,8 +62,10 @@ train-rgb *ARGS:
     uv run python train_metadrive.py \
         --modality rgb \
         --total-timesteps {{ TOTAL_TIMESTEPS }} \
-        --n-envs {{ N_ENVS }} \
+        --n-envs {{ IMAGE_N_ENVS }} \
         --device {{ DEVICE }} \
+        --memory-budget-gb {{ IMAGE_MEMORY_BUDGET_GB }} \
+        --no-inline-eval \
         {{ ARGS }}
 
 # Train all modalities (in sequence)
@@ -169,10 +183,12 @@ help:
     @echo "Environment Variables (override defaults):"
     @echo "  TOTAL_TIMESTEPS={{ TOTAL_TIMESTEPS }}"
     @echo "  N_ENVS={{ N_ENVS }}"
+    @echo "  IMAGE_N_ENVS={{ IMAGE_N_ENVS }}"
     @echo "  DEVICE={{ DEVICE }}"
     @echo "  MODELS_DIR={{ MODELS_DIR }}"
+    @echo "  IMAGE_MEMORY_BUDGET_GB={{ IMAGE_MEMORY_BUDGET_GB }}"
     @echo ""
     @echo "Examples:"
     @echo "  just train-sparse --total-timesteps 500000"
     @echo "  just eval-sparse --render --save-video"
-    @echo "  TOTAL_TIMESTEPS=2000000 just train-rgb"
+    @echo "  TOTAL_TIMESTEPS=2000000 IMAGE_MEMORY_BUDGET_GB=12 just train-rgb"

@@ -9,16 +9,19 @@ Features:
 
 Usage:
     # Basic evaluation (headless)
-    python evaluate_metadrive.py --model-path ./models/sparse_lidar/sac_metadrive_final.zip --modality sparse_lidar
+    python evaluate_metadrive.py --model-path ./models/bev/sac_metadrive_final.zip --modality bev
 
     # Evaluate with rendering
-    python evaluate_metadrive.py --model-path ./models/sparse_lidar/sac_metadrive_final.zip --modality sparse_lidar --render
+    python evaluate_metadrive.py --model-path ./models/bev/sac_metadrive_final.zip --modality bev --render
 
     # Evaluate with video recording
-    python evaluate_metadrive.py --model-path ./models/sparse_lidar/sac_metadrive_final.zip --modality sparse_lidar --save-video --video-dir ./videos
+    python evaluate_metadrive.py --model-path ./models/rgb/sac_metadrive_final.zip --modality rgb --save-video --video-dir ./videos
 
     # Evaluate with specific number of episodes
-    python evaluate_metadrive.py --model-path ./models/sparse_lidar/sac_metadrive_final.zip --modality sparse_lidar --episodes 100
+    python evaluate_metadrive.py --model-path ./models/bev/sac_metadrive_final.zip --modality bev --episodes 100
+
+    # Quick sanity-check eval (fast)
+    python evaluate_metadrive.py --model-path ./models/bev/sac_metadrive_final.zip --modality bev --episodes 10 --no-save-csv
 """
 
 import os
