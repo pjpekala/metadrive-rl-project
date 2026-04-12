@@ -15,7 +15,13 @@
 # 2. Runs the training script with EGL-based headless rendering (no Xvfb needed)
 #
 # NOTE: The training script configures Panda3D to use p3headlessgl (EGL) which
-# provides GPU-accelerated headless rendering without needing Xvfb.
+# provides GPU-accelerated headless rendering without needing Xvfb.a
+
+
+# on runpod need to instal dependencies:  apt-get update && apt-get install -y --no-install-recommends libegl1 libgl1 libgles2 libglvnd0 libx11-6 libxext6 libsm6 libice6
+# and set:    export NVIDIA_VISIBLE_DEVICES=all
+   #export NVIDIA_DRIVER_CAPABILITIES=all
+   #export __GLX_VENDOR_LIBRARY_NAME=nvidia
 # =============================================================================
 
 set -e  # Exit on error
