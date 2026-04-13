@@ -1,0 +1,2 @@
+modality,model_path,episodes,success_rate,collision_rate,out_of_road_rate,mean_reward,mean_episode_length,mean_speed,std_reward,std_episode_length
+rgb,models/rgb/sac_metadrive_final.zip,10,0.1,0.6,0.5,79.1889277284134,107.1,0.5864185027792738,100.42091841657745,40.098503712732224

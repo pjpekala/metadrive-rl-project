@@ -1,15 +1,27 @@
 # MetaDrive RL Training Project
 
 ## Environment Setup
-This project uses a conda environment located at:
-`/home/kaivalyajadhav/miniconda3/envs/envmetadrive`
+This project uses `uv` with a `.venv` virtual environment located at the project root.
 
 \`\`\`bash
-# Activate conda environment
-conda activate envmetadrive
+# Activate virtual environment
+source .venv/bin/activate
 
-# Or use the full path to Python
-/home/kaivalyajadhav/miniconda3/envs/envmetadrive/bin/python
+# Or use uv run directly
+uv run python train_metadrive.py ...
+\`\`\`
+
+### GPU Requirement
+MetaDrive with rendering requires NVIDIA GPU and drivers. The training script automatically sets:
+\`\`\`bash
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+\`\`\`
+
+### System Dependencies
+On headless servers, you may need to install EGL libraries:
+\`\`\`bash
+apt-get update && apt-get install -y libegl1 libgl1
+ldconfig
 \`\`\`
 
 To recreate the environment from scratch, save the following as \`environment.yml\` and run \`conda env create -f environment.yml\`:
@@ -218,9 +230,22 @@ python evaluate_metadrive.py --model-path ./models/sparse_lidar/sac_metadrive_fi
 |-----------|---------|-------------|
 | `total_timesteps` | 1,000,000 | Total training steps |
 | `learning_rate` | 3e-4 | Adam learning rate |
-| `buffer_size` | 1,000,000 | Replay buffer size |
-| `batch_size` | 256 | Training batch size |
+| `buffer_size` | 300,000 | Replay buffer size |
+| `batch_size` | 512 | Training batch size |
 | `n_envs` | 8 | Parallel environments |
+
+---
+
+## Reward Function
+
+| Component | Value | Description |
+|-----------|-------|-------------|
+| `driving_reward` | 1.0 | Per-step reward for forward progress |
+| `speed_reward` | 0.1 | Bonus for higher speeds |
+| `success_reward` | 100.0 | Reward for reaching destination |
+| `out_of_road_penalty` | 50.0 | Penalty for leaving road |
+| `crash_vehicle_penalty` | 50.0 | Penalty for vehicle collisions |
+| `crash_object_penalty` | 50.0 | Penalty for object collisions |
 
 ---
 

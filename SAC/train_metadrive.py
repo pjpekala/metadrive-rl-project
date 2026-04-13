@@ -389,10 +389,10 @@ def get_env_config(
         horizon=2000,
         driving_reward=1.0,
         speed_reward=0.1,
-        out_of_road_penalty=5.0,
-        crash_vehicle_penalty=5.0,
-        crash_object_penalty=5.0,
-        success_reward=10.0,
+        out_of_road_penalty=50.0,
+        crash_vehicle_penalty=50.0,
+        crash_object_penalty=50.0,
+        success_reward=100.0,
         out_of_route_done=True,
         window_size=(1200, 800) if render else (800, 600),
         camera_height=3.0,
@@ -819,7 +819,7 @@ def train_sac_agent(
     modality: str = "sparse_lidar",
     total_timesteps: int = 1_000_000,
     learning_rate: float = 3e-4,
-    buffer_size: int = 1_000_000,
+    buffer_size: int = 300_000,
     learning_starts: int = 1000,
     batch_size: int = 512,
     train_freq: int = 1,
@@ -841,10 +841,10 @@ def train_sac_agent(
     # Adjust hyperparameters for image modalities based on available resources
     # Only auto-adjust if using default values (allows CLI override)
     if is_image_modality:
-        if buffer_size == 1_000_000:
-            buffer_size = 100_000
+        if buffer_size == 300_000:
+            buffer_size = 300_000
             print(
-                f"[*] Buffer size adjusted to {buffer_size:,} for image modality '{modality}'"
+                f"[*] Buffer size set to {buffer_size:,} for image modality '{modality}'"
             )
         if learning_starts == 1000:
             learning_starts = 10_000
@@ -1138,8 +1138,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--buffer-size",
         type=int,
-        default=1_000_000,
-        help="Replay buffer size (default: 1M, auto-adjusted to 100k for image modalities)",
+        default=300_000,
+        help="Replay buffer size (default: 300K, auto-adjusted for image modalities)",
     )
     parser.add_argument(
         "--train-freq",
