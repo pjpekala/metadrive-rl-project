@@ -19,20 +19,20 @@ Usage:
     # Train Dense LiDAR
     python train_metadrive.py --modality dense_lidar --total-timesteps 1_000_000
 
-    # Train BEV (desktop-safe defaults)
-    ./run_training.sh train_metadrive.py --modality bev --hardware desktop --memory-budget-gb 12 --no-inline-eval
+    # Train BEV (explicit image settings, desktop-safe)
+    ./run_training.sh train_metadrive.py --modality bev --n-envs 1 --buffer-size 40000 --batch-size 128 --learning-starts 3000 --train-freq 8 --gradient-steps 2 --learning-rate 1e-4 --vec-env dummy --memory-budget-gb 12 --no-inline-eval
 
-    # Train BEV with explicit RAM budget (safe desktop default)
-    python train_metadrive.py --modality bev --hardware desktop --memory-budget-gb 12
+    # Train BEV with explicit RAM budget
+    python train_metadrive.py --modality bev --n-envs 1 --memory-budget-gb 12 --vec-env dummy
 
-    # Train RGB (RunPod 3090, ~48GB RAM / 24GB VRAM)
-    ./run_training.sh train_metadrive.py --modality rgb --hardware runpod --total-timesteps 1_000_000
+    # Train RGB (RunPod 3090, quality-oriented)
+    ./run_training.sh train_metadrive.py --modality rgb --n-envs 2 --buffer-size 150000 --batch-size 512 --learning-starts 10000 --train-freq 8 --gradient-steps 4 --learning-rate 1e-4 --vec-env subproc --memory-budget-gb 50 --total-timesteps 1_000_000
 
     # Run a lightweight CPU debug training pass
     python train_metadrive.py --modality bev --total-timesteps 20_000 --n-envs 1 --device cpu --no-inline-eval
 
-    # Resume interrupted training (hardware preset re-applied automatically)
-    python train_metadrive.py --modality bev --hardware desktop
+    # Resume interrupted training with explicit config
+    python train_metadrive.py --modality bev --n-envs 1 --buffer-size 40000 --vec-env dummy
 
     # Evaluate a saved model (separate script)
     python evaluate_metadrive.py --model-path ./models/bev/sac_metadrive_final.zip --modality bev --render
@@ -177,7 +177,7 @@ MODALITY_CONFIG = {
 }
 
 # =============================================================================
-# HARDWARE PRESETS FOR IMAGE MODALITIES
+# IMAGE MEMORY GUARDRAIL DEFAULTS
 # =============================================================================
 #
 # Image observations (BEV, RGB) store (3, 96, 96) float32 arrays in the replay
@@ -198,42 +198,11 @@ MODALITY_CONFIG = {
 # uses ~500 MB of CPU RAM; 8 envs + buffer already saturates 16 GB.
 # =============================================================================
 
-HARDWARE_PRESETS: dict[str, dict] = {
-    # ~16 GB system RAM, ~8 GB VRAM (e.g. RTX 3070/3080)
-    # Empirically conservative settings for desktop stability.
-    "desktop": {
-        "n_envs": 2,
-        "buffer_size": 40_000,
-        "batch_size": 128,
-        "learning_starts": 3_000,
-        "train_freq": 4,
-        "gradient_steps": 1,
-        "memory_budget_gb": 12.0,
-        "base_process_ram_gb": 4.0,
-        "env_worker_ram_gb": 1.8,
-        "eval_env_ram_gb": 1.2,
-        "min_buffer_size": 20_000,
-        "max_n_envs": 2,
-        "max_buffer_size": 50_000,
-    },
-    # ~48 GB system RAM, 24 GB VRAM (e.g. RTX 3090 on RunPod)
-    # 150k buffer × 2 × 27 KB = 7.7 GB  ✓
-    "runpod": {
-        "n_envs": 8,
-        "buffer_size": 150_000,
-        "batch_size": 512,
-        "learning_starts": 10_000,
-        "train_freq": 8,
-        "gradient_steps": 4,
-        "memory_budget_gb": 28.0,
-        "base_process_ram_gb": 3.0,
-        "env_worker_ram_gb": 0.5,
-        "eval_env_ram_gb": 0.8,
-        "min_buffer_size": 80_000,
-        "max_n_envs": 8,
-        "max_buffer_size": 200_000,
-    },
-}
+IMAGE_DEFAULT_MEMORY_BUDGET_GB = 12.0
+IMAGE_BASE_PROCESS_RAM_GB = 4.0
+IMAGE_ENV_WORKER_RAM_GB = 1.8
+IMAGE_EVAL_ENV_RAM_GB = 1.2
+IMAGE_MIN_BUFFER_SIZE = 20_000
 
 TRAIN_SEED_START = 0
 TRAIN_SEED_COUNT = 800
@@ -1117,16 +1086,14 @@ def _fit_image_config_to_memory_budget(
     n_envs: int,
     buffer_size: int,
     include_inline_eval: bool,
-    preset: dict[str, Any],
+    base_process_ram_gb: float,
+    env_worker_ram_gb: float,
+    eval_env_ram_gb: float,
+    min_buffer_size: int,
     memory_budget_gb: float,
     strict_memory_budget: bool,
 ) -> tuple[int, int, float]:
     """Clamp n_envs/buffer_size for image modalities to fit host RAM budget."""
-    base_process_ram_gb = float(preset["base_process_ram_gb"])
-    env_worker_ram_gb = float(preset["env_worker_ram_gb"])
-    eval_env_ram_gb = float(preset["eval_env_ram_gb"])
-    min_buffer_size = int(preset["min_buffer_size"])
-
     est = _estimate_image_total_ram_gb(
         buffer_size=buffer_size,
         modality=modality,
@@ -1189,108 +1156,27 @@ def train_sac_agent(
     inline_eval: bool = True,
     eval_freq: int = 100_000,
     eval_episodes: int = 8,
-    hardware: str = "auto",
+    vec_env: str = "auto",
     memory_budget_gb: Optional[float] = None,
+    resume_from: Optional[str] = None,
 ):
     modality_config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["sparse_lidar"])
     policy_type = modality_config["policy"]
     is_image_modality = modality_config.get("image_observation", False)
-    resolved_hw = hardware
     resolved_memory_budget_gb = memory_budget_gb
     resolved_save_replay_buffer = not is_image_modality
     strict_memory_budget = True
 
     # -------------------------------------------------------------------------
-    # IMAGE MODALITY: apply hardware-aware defaults
+    # IMAGE MODALITY: apply memory-budget guardrail
     # -------------------------------------------------------------------------
-    # Why this matters:
-    #
-    # Each 96×96 RGB/BEV image observation costs 108 KB as float32. With the
-    # old defaults (buffer=100k, optimize=False), the replay buffer alone
-    # tries to allocate ~20 GB — crashing on a 16 GB desktop immediately.
-    #
-    # We detect which set of CLI args are still at their defaults (sentinel
-    # values) and replace them with hardware-appropriate values.  If the user
-    # explicitly passed any of these flags, their value is preserved.
-    #
-    # Hardware presets:
-    #   "desktop"  — 16 GB RAM / 8 GB VRAM.  4 envs, 100 k buffer baseline.
-    #   "runpod"   — 48 GB RAM / 24 GB VRAM. 8 envs, 150 k buffer baseline.
-    #   "auto"     — uses "desktop" defaults (safe on any machine; increase
-    #                buffer manually if you have more RAM).
     # -------------------------------------------------------------------------
 
     if is_image_modality:
-        # Resolve which preset to apply
-        resolved_hw = hardware if hardware in HARDWARE_PRESETS else "desktop"
-        if hardware == "auto":
-            print(
-                "[*] --hardware auto: using 'desktop' preset for image modality. "
-                "Pass --hardware runpod for larger buffers on a 3090 pod."
-            )
-        preset = HARDWARE_PRESETS[resolved_hw]
-
-        # Only override parameters that are still at their CLI default values.
-        # Sentinel values are the argparse defaults defined at the bottom of
-        # this file (same as the function signature defaults for LiDAR).
-        if n_envs == 8:
-            n_envs = preset["n_envs"]
-            print(f"[*] n_envs adjusted to {n_envs} (hardware={resolved_hw})")
-
-        if buffer_size == 1_000_000:
-            buffer_size = preset["buffer_size"]
-            print(
-                f"[*] buffer_size adjusted to {buffer_size:,} (hardware={resolved_hw})"
-            )
-
-        if learning_starts == 1000:
-            learning_starts = preset["learning_starts"]
-            print(
-                f"[*] learning_starts adjusted to {learning_starts:,} "
-                f"(hardware={resolved_hw})"
-            )
-
-        if batch_size == 512:
-            batch_size = preset["batch_size"]
-            print(
-                f"[*] batch_size adjusted to {batch_size} (hardware={resolved_hw})"
-            )
-
-        if train_freq == 1:
-            train_freq = preset["train_freq"]
-            print(
-                f"[*] train_freq adjusted to {train_freq} (hardware={resolved_hw})"
-            )
-
-        if gradient_steps == 1:
-            gradient_steps = preset["gradient_steps"]
-            print(
-                f"[*] gradient_steps adjusted to {gradient_steps} "
-                f"(hardware={resolved_hw})"
-            )
-
-        # Lower learning rate for image-based SAC.  3e-4 (MLP default) is
-        # too aggressive for a CNN encoder: the critic's gradients can push
-        # the encoder features out of distribution before the actor catches up.
-        # 1e-4 is the standard in SAC-pixel / DrQ / CURL literature.
-        if learning_rate == 3e-4:
-            learning_rate = 1e-4
-            print(f"[*] learning_rate adjusted to {learning_rate} for image modality")
-
-        # Safety caps for host-RAM stability on constrained hardware.
-        max_safe_n_envs = int(preset["max_n_envs"])
-        max_safe_buffer_size = int(preset["max_buffer_size"])
-        if n_envs > max_safe_n_envs:
-            n_envs = max_safe_n_envs
-            print(f"[*] n_envs capped to {n_envs} for hardware stability")
-        if buffer_size > max_safe_buffer_size:
-            buffer_size = max_safe_buffer_size
-            print(f"[*] buffer_size capped to {buffer_size:,} for hardware stability")
-
         resolved_memory_budget_gb = (
             float(memory_budget_gb)
             if memory_budget_gb is not None and memory_budget_gb > 0
-            else float(preset["memory_budget_gb"])
+            else IMAGE_DEFAULT_MEMORY_BUDGET_GB
         )
 
         if inline_eval:
@@ -1298,21 +1184,24 @@ def train_sac_agent(
                 buffer_size=buffer_size,
                 modality=modality,
                 n_envs=n_envs,
-                base_process_ram_gb=float(preset["base_process_ram_gb"]),
-                env_worker_ram_gb=float(preset["env_worker_ram_gb"]),
+                base_process_ram_gb=IMAGE_BASE_PROCESS_RAM_GB,
+                env_worker_ram_gb=IMAGE_ENV_WORKER_RAM_GB,
                 include_inline_eval=True,
-                eval_env_ram_gb=float(preset["eval_env_ram_gb"]),
+                eval_env_ram_gb=IMAGE_EVAL_ENV_RAM_GB,
             )
             est_without_eval = _estimate_image_total_ram_gb(
                 buffer_size=buffer_size,
                 modality=modality,
                 n_envs=n_envs,
-                base_process_ram_gb=float(preset["base_process_ram_gb"]),
-                env_worker_ram_gb=float(preset["env_worker_ram_gb"]),
+                base_process_ram_gb=IMAGE_BASE_PROCESS_RAM_GB,
+                env_worker_ram_gb=IMAGE_ENV_WORKER_RAM_GB,
                 include_inline_eval=False,
-                eval_env_ram_gb=float(preset["eval_env_ram_gb"]),
+                eval_env_ram_gb=IMAGE_EVAL_ENV_RAM_GB,
             )
-            if est_with_eval > resolved_memory_budget_gb and est_without_eval <= resolved_memory_budget_gb:
+            if (
+                est_with_eval > resolved_memory_budget_gb
+                and est_without_eval <= resolved_memory_budget_gb
+            ):
                 inline_eval = False
                 print(
                     "[*] Disabled inline eval in image mode to stay within memory budget "
@@ -1326,7 +1215,10 @@ def train_sac_agent(
             n_envs=n_envs,
             buffer_size=buffer_size,
             include_inline_eval=inline_eval,
-            preset=preset,
+            base_process_ram_gb=IMAGE_BASE_PROCESS_RAM_GB,
+            env_worker_ram_gb=IMAGE_ENV_WORKER_RAM_GB,
+            eval_env_ram_gb=IMAGE_EVAL_ENV_RAM_GB,
+            min_buffer_size=IMAGE_MIN_BUFFER_SIZE,
             memory_budget_gb=resolved_memory_budget_gb,
             strict_memory_budget=strict_memory_budget,
         )
@@ -1352,6 +1244,7 @@ def train_sac_agent(
 
     csv_log_path = save_dir / "training_log.csv"
     model_path = save_dir / "sac_metadrive_final.zip"
+    resume_source = Path(resume_from) if resume_from else model_path
 
     # -------------------------------------------------------------------------
     # Print config summary
@@ -1360,8 +1253,7 @@ def train_sac_agent(
     print(f"MetaDrive SAC Training - {modality_config['description']}")
     print("=" * 70)
     print(f"Device:               {device}")
-    print(f"Hardware preset:      {hardware}")
-    print(f"Resolved hardware:    {resolved_hw}")
+    print(f"Vec env mode:         {vec_env}")
     print(f"Policy:               {policy_type}")
     print(f"Parallel environments:{n_envs}")
     print(
@@ -1383,6 +1275,7 @@ def train_sac_agent(
         print(f"Inline eval mode:     {'on' if inline_eval else 'off'}")
         print(f"Save replay buffer:   {'on' if resolved_save_replay_buffer else 'off'}")
         _print_buffer_memory_estimate(buffer_size, modality)
+    print(f"Resume source:        {resume_source}")
     print("=" * 70)
 
     # -------------------------------------------------------------------------
@@ -1391,7 +1284,12 @@ def train_sac_agent(
     print("\nCreating training environment...")
     print(f"Creating {n_envs} parallel environments...")
 
-    vec_env_cls = DummyVecEnv if (is_image_modality and n_envs <= 2) else SubprocVecEnv
+    if vec_env == "dummy":
+        vec_env_cls = DummyVecEnv
+    elif vec_env == "subproc":
+        vec_env_cls = SubprocVecEnv
+    else:
+        vec_env_cls = DummyVecEnv if (is_image_modality and n_envs <= 2) else SubprocVecEnv
 
     print(f"Vector env class:     {vec_env_cls.__name__}")
 
@@ -1412,11 +1310,41 @@ def train_sac_agent(
     start_timesteps = 0
     replay_buffer_path = save_dir / "replay_buffer.pkl"
 
-    if model_path.exists():
+    if resume_source.exists():
         try:
-            model = SAC.load(str(model_path), env=env, tensorboard_log=str(log_dir))
+            load_overrides: dict[str, Any] = {
+                "learning_rate": learning_rate,
+                "buffer_size": buffer_size,
+                "learning_starts": learning_starts,
+                "batch_size": batch_size,
+                "train_freq": train_freq,
+                "gradient_steps": gradient_steps,
+            }
+            if is_image_modality:
+                load_overrides["replay_buffer_class"] = Uint8ImageDictReplayBuffer
+
+            model = SAC.load(
+                str(resume_source),
+                env=env,
+                tensorboard_log=str(log_dir),
+                device=device,
+                custom_objects=load_overrides,
+                **load_overrides,
+            )
             start_timesteps = model.num_timesteps
-            print(f"[+] Resumed from '{model_path}' at step {start_timesteps:,}")
+            print(f"[+] Resumed from '{resume_source}' at step {start_timesteps:,}")
+            print("[*] Effective resumed hyperparameters:")
+            print(f"    learning_rate:     {model.learning_rate}")
+            print(f"    buffer_size:       {model.buffer_size:,}")
+            print(f"    learning_starts:   {model.learning_starts:,}")
+            print(f"    batch_size:        {model.batch_size}")
+            print(f"    train_freq:        {model.train_freq}")
+            print(f"    gradient_steps:    {model.gradient_steps}")
+            if is_image_modality:
+                print(
+                    "    replay_buffer_cls: "
+                    f"{model.replay_buffer_class.__name__}"
+                )
             if replay_buffer_path.exists():
                 replay_file_size_gb = replay_buffer_path.stat().st_size / (1024**3)
                 if is_image_modality:
@@ -1446,6 +1374,8 @@ def train_sac_agent(
             model_loaded = True
         except Exception as e:
             print(f"[!] Model load failed ({e}) — starting fresh.")
+    elif resume_from is not None:
+        raise FileNotFoundError(f"Resume checkpoint not found: {resume_source}")
 
     if not model_loaded:
         print("[>] Initializing new SAC model...")
@@ -1634,7 +1564,43 @@ if __name__ == "__main__":
         "--n-envs",
         type=int,
         default=8,
-        help="Number of parallel environments (auto-adjusted for image modalities)",
+        help="Number of parallel environments",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=3e-4,
+        help="Learning rate",
+    )
+    parser.add_argument(
+        "--buffer-size",
+        type=int,
+        default=1_000_000,
+        help="Replay buffer size",
+    )
+    parser.add_argument(
+        "--learning-starts",
+        type=int,
+        default=1000,
+        help="Timesteps before learning starts",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=512,
+        help="SAC minibatch size",
+    )
+    parser.add_argument(
+        "--train-freq",
+        type=int,
+        default=1,
+        help="Environment steps between update phases",
+    )
+    parser.add_argument(
+        "--gradient-steps",
+        type=int,
+        default=1,
+        help="Gradient updates per training phase",
     )
     parser.add_argument(
         "--device",
@@ -1656,17 +1622,11 @@ if __name__ == "__main__":
         help="Enable AMP (fp16) training for reduced VRAM usage",
     )
     parser.add_argument(
-        "--hardware",
+        "--vec-env",
         type=str,
         default="auto",
-        choices=["auto", "desktop", "runpod"],
-        help=(
-            "Hardware preset for image modalities (bev, rgb). "
-            "'desktop': 16 GB RAM / 8 GB VRAM — conservative defaults (2 envs, 40k buffer). "
-            "'runpod':  48 GB RAM / 24 GB VRAM — 8 envs, 150k buffer baseline. "
-            "'auto':    same as 'desktop' (safe default). "
-            "LiDAR modalities ignore this flag."
-        ),
+        choices=["auto", "dummy", "subproc"],
+        help="Vector environment backend",
     )
     parser.add_argument(
         "--memory-budget-gb",
@@ -1674,7 +1634,22 @@ if __name__ == "__main__":
         default=None,
         help=(
             "Host RAM budget for image modalities (BEV/RGB). "
-            "Defaults to preset budget (desktop=12GB, runpod=28GB)."
+            "Defaults to 12GB if omitted."
+        ),
+    )
+    parser.add_argument(
+        "--save-dir",
+        type=str,
+        default="./models",
+        help="Base output directory for models/logs (modality subfolder is appended)",
+    )
+    parser.add_argument(
+        "--resume-from",
+        type=str,
+        default=None,
+        help=(
+            "Path to a specific checkpoint/model zip to resume from. "
+            "If omitted, auto-resume uses <save-dir>/<modality>/sac_metadrive_final.zip"
         ),
     )
 
@@ -1683,10 +1658,18 @@ if __name__ == "__main__":
     train_sac_agent(
         modality=args.modality,
         total_timesteps=args.total_timesteps,
+        learning_rate=args.learning_rate,
+        buffer_size=args.buffer_size,
+        learning_starts=args.learning_starts,
+        batch_size=args.batch_size,
+        train_freq=args.train_freq,
+        gradient_steps=args.gradient_steps,
         n_envs=args.n_envs,
+        save_dir=args.save_dir,
         device=args.device,
         mixed_precision=args.mixed_precision,
         inline_eval=not args.no_inline_eval,
-        hardware=args.hardware,
+        vec_env=args.vec_env,
         memory_budget_gb=args.memory_budget_gb,
+        resume_from=args.resume_from,
     )

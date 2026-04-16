@@ -3,19 +3,11 @@
 #
 # Quick examples:
 #   just train-bev
-#   IMAGE_MEMORY_BUDGET_GB=10 just train-bev --total-timesteps 500000
-#   just train-rgb --hardware runpod
-#   IMAGE_N_ENVS=1 just train-bev --no-inline-eval
+#   just train-bev --total-timesteps 500000
+#   just train-rgb --n-envs 2 --buffer-size 150000 --batch-size 512 --learning-starts 10000 --train-freq 8 --gradient-steps 4 --learning-rate 0.0001 --vec-env subproc --memory-budget-gb 50
+#   just train-bev --no-inline-eval
 #   just eval-bev --episodes 20
 #   just eval-rgb --render --save-video
-
-# Default values (can be overridden)
-TOTAL_TIMESTEPS := "1000000"
-N_ENVS := "8"
-IMAGE_N_ENVS := "1"
-DEVICE := "cuda"
-MODELS_DIR := "./models"
-IMAGE_MEMORY_BUDGET_GB := "12"
 
 # === SETUP ===
 
@@ -32,28 +24,35 @@ setup:
 train-sparse *ARGS:
     uv run python train_metadrive.py \
         --modality sparse_lidar \
-        --total-timesteps {{ TOTAL_TIMESTEPS }} \
-        --n-envs {{ N_ENVS }} \
-        --device {{ DEVICE }} \
+        --total-timesteps 1000000 \
+        --n-envs 8 \
+        --device cuda \
         {{ ARGS }}
 
 # Train Dense LiDAR model
 train-dense *ARGS:
     uv run python train_metadrive.py \
         --modality dense_lidar \
-        --total-timesteps {{ TOTAL_TIMESTEPS }} \
-        --n-envs {{ N_ENVS }} \
-        --device {{ DEVICE }} \
+        --total-timesteps 1000000 \
+        --n-envs 8 \
+        --device cuda \
         {{ ARGS }}
 
 # Train BEV (Bird's Eye View) model
 train-bev *ARGS:
     uv run python train_metadrive.py \
         --modality bev \
-        --total-timesteps {{ TOTAL_TIMESTEPS }} \
-        --n-envs {{ IMAGE_N_ENVS }} \
-        --device {{ DEVICE }} \
-        --memory-budget-gb {{ IMAGE_MEMORY_BUDGET_GB }} \
+        --total-timesteps 2000000 \
+        --n-envs 1 \
+        --buffer-size 80000 \
+        --learning-starts 8000 \
+        --batch-size 128 \
+        --train-freq 4 \
+        --gradient-steps 2 \
+        --learning-rate 0.0001 \
+        --vec-env dummy \
+        --device cuda \
+        --memory-budget-gb 12 \
         --no-inline-eval \
         {{ ARGS }}
 
@@ -61,10 +60,17 @@ train-bev *ARGS:
 train-rgb *ARGS:
     uv run python train_metadrive.py \
         --modality rgb \
-        --total-timesteps {{ TOTAL_TIMESTEPS }} \
-        --n-envs {{ IMAGE_N_ENVS }} \
-        --device {{ DEVICE }} \
-        --memory-budget-gb {{ IMAGE_MEMORY_BUDGET_GB }} \
+        --total-timesteps 1000000 \
+        --n-envs 1 \
+        --buffer-size 40000 \
+        --learning-starts 3000 \
+        --batch-size 128 \
+        --train-freq 8 \
+        --gradient-steps 2 \
+        --learning-rate 0.0001 \
+        --vec-env dummy \
+        --device cuda \
+        --memory-budget-gb 12 \
         --no-inline-eval \
         {{ ARGS }}
 
@@ -80,28 +86,28 @@ train-all:
 # Evaluate Sparse LiDAR model
 eval-sparse *ARGS:
     uv run python evaluate_metadrive.py \
-        --model-path {{ MODELS_DIR }}/sparse_lidar/sac_metadrive_final.zip \
+        --model-path ./models/sparse_lidar/sac_metadrive_final.zip \
         --modality sparse_lidar \
         {{ ARGS }}
 
 # Evaluate Dense LiDAR model
 eval-dense *ARGS:
     uv run python evaluate_metadrive.py \
-        --model-path {{ MODELS_DIR }}/dense_lidar/sac_metadrive_final.zip \
+        --model-path ./models/dense_lidar/sac_metadrive_final.zip \
         --modality dense_lidar \
         {{ ARGS }}
 
 # Evaluate BEV model
 eval-bev *ARGS:
     uv run python evaluate_metadrive.py \
-        --model-path {{ MODELS_DIR }}/bev/sac_metadrive_final.zip \
+        --model-path ./models/bev/sac_metadrive_final.zip \
         --modality bev \
         {{ ARGS }}
 
 # Evaluate RGB model
 eval-rgb *ARGS:
     uv run python evaluate_metadrive.py \
-        --model-path {{ MODELS_DIR }}/rgb/sac_metadrive_final.zip \
+        --model-path ./models/rgb/sac_metadrive_final.zip \
         --modality rgb \
         {{ ARGS }}
 
@@ -109,44 +115,44 @@ eval-rgb *ARGS:
 
 # Launch TensorBoard for Sparse LiDAR
 tb-sparse:
-    uv run tensorboard --logdir {{ MODELS_DIR }}/sparse_lidar/logs
+    uv run tensorboard --logdir ./models/sparse_lidar/logs
 
 # Launch TensorBoard for Dense LiDAR
 tb-dense:
-    uv run tensorboard --logdir {{ MODELS_DIR }}/dense_lidar/logs
+    uv run tensorboard --logdir ./models/dense_lidar/logs
 
 # Launch TensorBoard for BEV
 tb-bev:
-    uv run tensorboard --logdir {{ MODELS_DIR }}/bev/logs
+    uv run tensorboard --logdir ./models/bev/logs
 
 # Launch TensorBoard for RGB
 tb-rgb:
-    uv run tensorboard --logdir {{ MODELS_DIR }}/rgb/logs
+    uv run tensorboard --logdir ./models/rgb/logs
 
 # Launch TensorBoard for all logs
 tb-all:
-    uv run tensorboard --logdir {{ MODELS_DIR }}
+    uv run tensorboard --logdir ./models
 
 # === UTILITIES ===
 
 # Clean training artifacts (models, logs, checkpoints)
 clean:
     @echo "[!] Cleaning training artifacts..."
-    rm -rf {{ MODELS_DIR }}/*/logs
-    rm -rf {{ MODELS_DIR }}/*/checkpoints
-    rm -f {{ MODELS_DIR }}/*/replay_buffer.pkl
+    rm -rf ./models/*/logs
+    rm -rf ./models/*/checkpoints
+    rm -f ./models/*/replay_buffer.pkl
     @echo "[+] Clean complete! Models preserved."
 
 # Clean everything including trained models
 clean-all:
     @echo "[!] Cleaning all artifacts including models..."
-    rm -rf {{ MODELS_DIR }}
+    rm -rf ./models
     @echo "[+] All artifacts removed!"
 
 # List available trained models
 list-models:
     @echo "Available trained models:"
-    @find {{ MODELS_DIR }} -name "*.zip" -type f 2>/dev/null | head -20 || echo "No models found."
+    @find ./models -name "*.zip" -type f 2>/dev/null | head -20 || echo "No models found."
 
 # Show help
 help:
@@ -180,15 +186,7 @@ help:
     @echo "  just clean-all          - Remove everything including models"
     @echo "  just list-models        - List available trained models"
     @echo ""
-    @echo "Environment Variables (override defaults):"
-    @echo "  TOTAL_TIMESTEPS={{ TOTAL_TIMESTEPS }}"
-    @echo "  N_ENVS={{ N_ENVS }}"
-    @echo "  IMAGE_N_ENVS={{ IMAGE_N_ENVS }}"
-    @echo "  DEVICE={{ DEVICE }}"
-    @echo "  MODELS_DIR={{ MODELS_DIR }}"
-    @echo "  IMAGE_MEMORY_BUDGET_GB={{ IMAGE_MEMORY_BUDGET_GB }}"
-    @echo ""
     @echo "Examples:"
     @echo "  just train-sparse --total-timesteps 500000"
     @echo "  just eval-sparse --render --save-video"
-    @echo "  TOTAL_TIMESTEPS=2000000 IMAGE_MEMORY_BUDGET_GB=12 just train-rgb"
+    @echo "  just train-rgb --n-envs 2 --buffer-size 150000 --batch-size 512 --learning-starts 10000 --train-freq 8 --gradient-steps 4 --learning-rate 0.0001 --vec-env subproc --memory-budget-gb 50"
